@@ -1,0 +1,97 @@
+// ══ Flappy 金苹果 ══ 一个完整的游戏,没有游戏引擎、没有主循环对象、没有一个事件监听器的注册/解绑。
+// 碰撞检测、计分、柱子回收——全是扁平的 when 条件;跳跃和物理冻结是代数,不是分支。
+// (素材为原创像素画,像素风致敬。点击画面拍打翅膀…呃,拍打苹果。)
+import { Text, Button } from "dom";
+import { delay } from "timer";
+
+// ── 全部游戏状态:7 个变量 ────────────────────────────────────────────────
+number alive = 1;          // 1=活着 0=游戏结束(它是物理系数,不是标志位)
+number fallY     = 200;        // 苹果的纵坐标
+number vel   = 0;          // 垂直速度
+number pillX = 340;        // 柱子横坐标(一对柱子循环使用)
+number seed  = 97;         // 决定缺口位置的伪随机种子
+number score = 0;
+
+number gapTop  := 64 + seed % 160;              // 缺口顶(派生:seed 一变它就变)
+string overlayShow := if (alive == 1) { "none" } else { "flex" };
+
+event<group> tick;
+
+container Game() {
+  id: "game"; position: "relative"; width: 320; height: 480; margin: "0 auto";
+  overflow: "hidden"; background: "linear-gradient(#79c6f2, #b8e4fb)"; borderRadius: "10px";
+  fontFamily: "ui-monospace, monospace"; imageRendering: "pixelated"; cursor: "pointer";
+
+  // 云(纯装饰)
+  Box { position: "absolute"; left: 36; top: 60; width: 72; height: 36;
+        backgroundImage: "url('./sprites/cloud.png')"; backgroundSize: "72px 36px"; imageRendering: "pixelated" }
+  Box { position: "absolute"; left: 200; top: 130; width: 48; height: 24;
+        backgroundImage: "url('./sprites/cloud.png')"; backgroundSize: "48px 24px"; imageRendering: "pixelated" }
+
+  // 上柱(石砖身 + 方块人柱帽):高度/位置全是反应式表达式,值变→自己动
+  Box { position: "absolute"; left: pillX; top: 0; width: 64; height: gapTop;
+        backgroundImage: "url('./sprites/pillar.png')"; backgroundSize: "64px 64px"; imageRendering: "pixelated" }
+  Box { position: "absolute"; left: pillX; top: gapTop - 64; width: 64; height: 64;
+        backgroundImage: "url('./sprites/cap.png')"; backgroundSize: "64px 64px"; imageRendering: "pixelated" }
+
+  // 下柱
+  Box { position: "absolute"; left: pillX; top: gapTop + 160; width: 64; height: 272 - gapTop;
+        backgroundImage: "url('./sprites/pillar.png')"; backgroundSize: "64px 64px"; imageRendering: "pixelated" }
+  Box { position: "absolute"; left: pillX; top: gapTop + 160; width: 64; height: 64;
+        backgroundImage: "url('./sprites/cap.png')"; backgroundSize: "64px 64px"; imageRendering: "pixelated" }
+
+  // 金苹果(速度决定俯仰角——也是反应式表达式)
+  Box { id: "apple"; position: "absolute"; left: 60; top: fallY; width: 48; height: 48;
+        backgroundImage: "url('./sprites/apple.png')"; backgroundSize: "48px 48px"; imageRendering: "pixelated";
+        transform: "rotate(" + vel * 3 + "deg)" }
+
+  // 地面
+  Box { position: "absolute"; left: 0; top: 432; width: 320; height: 48;
+        backgroundImage: "url('./sprites/ground.png')"; backgroundSize: "48px 48px"; imageRendering: "pixelated" }
+
+  // 计分牌
+  Text("${score}") { id: "score"; position: "absolute"; left: 0; top: 18; width: 320;
+        textAlign: "center"; fontSize: "34px"; fontWeight: "700"; color: "#ffffff";
+        textShadow: "2px 2px 0 #3a2c0a" }
+
+  // 拍打层:盖住整个画面的透明按钮(活着=跳,死了=被结算层挡住点不到)
+  flap = Button("") { position: "absolute"; left: 0; top: 0; width: 320; height: 480;
+        background: "transparent"; border: "none"; cursor: "pointer"; zIndex: "5" }
+
+  // 结算层:display 由 alive 派生,死了才出现(统一块 = 配置 + 子元素)
+  Box {
+    position: "absolute"; left: 0; top: 0; width: 320; height: 480; zIndex: "10";
+    display: overlayShow + ""; flexDirection: "column"; alignItems: "center"; justifyContent: "center";
+    background: "rgba(30, 27, 46, .55)";
+    Text("GAME OVER") { fontSize: "30px"; fontWeight: "700"; color: "#ffb454"; textShadow: "2px 2px 0 #3a2c0a"; marginBottom: "6px" }
+    Text("得分 ${score}") { fontSize: "16px"; color: "#ffffff"; marginBottom: "18px" }
+    retry = Button("再来一次") { padding: "10px 22px"; fontSize: "16px"; fontWeight: "700"; cursor: "pointer";
+        background: "#ffb454"; color: "#241c0a"; border: "none"; borderRadius: "8px" }
+  }
+
+  // ── 游戏逻辑:五个扁平的 when,完 ─────────────────────────────────────────
+  when(flap) { vel = -8 * alive + vel * (1 - alive); }        // 跳跃 = 代数:活着才有推力
+
+  when(tick) {                                                 // 心跳:物理也全是代数,alive=0 时世界自动冻结
+    vel = vel + 0.7 * alive;
+    fallY = fallY + vel * alive;
+    fallY = if (fallY < 0) { 0 } else { fallY };
+    pillX = pillX - 3 * alive;
+    delay(33, tick);
+  }
+
+  when(pillX < -70) { seed = (seed * 73 + 41) % 977; pillX = 340; }   // 柱子回收再生(顺带换缺口)
+
+  when(alive == 1 && pillX < 0) { score = score + 1; }         // 计分:柱子被甩到身后的一瞬,自动 +1
+
+  when(alive == 1 && (fallY > 388 ||                               // 碰撞 = 一条 when 条件:落地,
+       (pillX < 102 && pillX > 0 &&                            //   或与柱子横向重叠时
+        (fallY < gapTop - 4 || fallY > gapTop + 116)))) {              //   高于缺口顶 / 低于缺口底
+    alive = 0;
+  }
+
+  when(retry) { fallY = 200; vel = 0; pillX = 340; score = 0; alive = 1; }
+}
+
+Game();
+delay(33, tick);

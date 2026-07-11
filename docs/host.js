@@ -47,6 +47,52 @@ const eventPayload = (el, de) => {
 // 感知信号值桥:把数值写进元素 backing group 的字段(width/height)→ 反应式跟随。写 field 串进内存→ws_write_field→读回(空)→释放。
 const writeField = (elemId, field, value) => { const [p, l] = wr(field); rd(X.ws_write_field(elemId, p, l, value)); X.ws_free(p, l); };
 
+// ── game2d 场景(host_game_* 的宿主侧)────────────────────────────────────────
+// 保留模式:引擎只推精灵状态(place/size/spin/show/tile),宿主每帧按创建序重画。
+// G = { canvas, ctx, images:{name→Image}, sprites:[{img,x,y,w,h,deg,visible,tile,tw,th,pat,patImg}], frameEvs:[eventId], t }
+let G = null, gameRafOn = false;
+const gameTick = (tms) => {
+  if (!G) { gameRafOn = false; return; }
+  requestAnimationFrame(gameTick);
+  const t = tms / 1000;
+  let dt = G.last === undefined ? 0 : t - G.last;
+  G.last = t;
+  if (dt > 0.05) dt = 0.05;              // 封顶:后台标签页切回时不产生一记巨大物理步长
+  G.t += dt;
+  // 先喂帧事件(引擎同步跑 when(frame) → place/spin 更新精灵状态),再画 → 同帧零滞后。
+  for (const ev of G.frameEvs) fireJson(ev, JSON.stringify({ dt, t: G.t }));
+  const { ctx, canvas } = G;
+  ctx.imageSmoothingEnabled = false;     // 像素风:最近邻缩放,不糊
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const s of G.sprites) {
+    if (!s.visible) continue;
+    const img = G.images[s.img];
+    if (!img || !img.complete || !img.naturalWidth) continue;   // 素材未加载完 → 本帧跳过(onload 后自然出现)
+    const w = s.w || img.naturalWidth, h = s.h || img.naturalHeight;
+    ctx.save();
+    ctx.translate(s.x + w / 2, s.y + h / 2);                    // 移到精灵中心(spin 绕中心转)
+    if (s.deg) ctx.rotate(s.deg * Math.PI / 180);
+    ctx.translate(-w / 2, -h / 2);                              // 回到精灵左上角为原点
+    if (s.tile) {
+      // 平铺:把素材缩放进 tw×th 离屏块 → repeat pattern(锚定精灵左上角)填满 w×h(自动裁齐)。
+      if (!s.pat || s.patImg !== img) {
+        const off = document.createElement("canvas");
+        off.width = s.tw; off.height = s.th;
+        const octx = off.getContext("2d");
+        octx.imageSmoothingEnabled = false;
+        octx.drawImage(img, 0, 0, s.tw, s.th);
+        s.pat = ctx.createPattern(off, "repeat");
+        s.patImg = img;
+      }
+      ctx.fillStyle = s.pat;
+      ctx.fillRect(0, 0, w, h);
+    } else {
+      ctx.drawImage(img, 0, 0, w, h);
+    }
+    ctx.restore();
+  }
+};
+
 const imports = { env: {
   // create(tag) → 新元素;先挂 body,被 append 到别处时浏览器自动移走 → 只有「根」留在 body。
   host_create: (tp, tl) => {
@@ -173,6 +219,41 @@ const imports = { env: {
   host_storage_get:    (kp, kl)         => { const v = localStorage.getItem(dec(kp, kl)); return v === null ? 0 : packStr(v); },
   host_storage_set:    (kp, kl, vp, vl) => { localStorage.setItem(dec(kp, kl), dec(vp, vl)); },
   host_storage_remove: (kp, kl)         => { localStorage.removeItem(dec(kp, kl)); },
+  // ── game2d:保留模式 canvas 精灵 + rAF 帧时钟(实现见上方 gameTick)──────────
+  // stage(w,h):建像素风 canvas,登进【同一张 els 元素表】→ dom 的 on/append/setStyle 直接可用(零新输入机制);
+  // 同时初始化场景 + 启动 rAF 循环。重复调用 = 重置场景(重跑程序不叠加旧精灵)。
+  host_game_stage: (w, h) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    canvas.style.imageRendering = "pixelated";   // 像素风:CSS 放大也不糊
+    canvas.style.display = "block";
+    const id = nextId++;
+    els[id] = canvas;
+    document.body.appendChild(canvas);           // 同 host_create:先挂 body,被 append 到别处时自动移走
+    G = { canvas, ctx: canvas.getContext("2d"), images: {}, sprites: [], frameEvs: [], t: 0, last: undefined };
+    if (!gameRafOn) { gameRafOn = true; requestAnimationFrame(gameTick); }
+    return id;
+  },
+  // image(name,url):登记素材并预加载。绘制对未加载完的素材静默跳过(onload 后自然出现),不报错。
+  host_game_image: (np, nl, up, ul) => {
+    if (!G) return;
+    const img = new Image();
+    img.src = dec(up, ul);
+    G.images[dec(np, nl)] = img;
+  },
+  // sprite(imgName) → 精灵 id(独立命名空间 = 场景数组下标+1;0 保留作"无效")。绘制顺序 = 创建顺序。
+  host_game_sprite: (np, nl) => {
+    if (!G) return 0;
+    G.sprites.push({ img: dec(np, nl), x: 0, y: 0, w: 0, h: 0, deg: 0, visible: 1, tile: false, tw: 0, th: 0, pat: null, patImg: null });
+    return G.sprites.length;                     // id 从 1 起
+  },
+  host_game_place: (sid, sx, sy)  => { const s = G && G.sprites[sid - 1]; if (s) { s.x = sx; s.y = sy; } },
+  host_game_size:  (sid, w, h)    => { const s = G && G.sprites[sid - 1]; if (s) { s.w = w; s.h = h; } },
+  host_game_spin:  (sid, deg)     => { const s = G && G.sprites[sid - 1]; if (s) s.deg = deg; },
+  host_game_show:  (sid, vis)     => { const s = G && G.sprites[sid - 1]; if (s) s.visible = vis; },
+  host_game_tile:  (sid, tw, th)  => { const s = G && G.sprites[sid - 1]; if (s) { s.tile = true; s.tw = tw; s.th = th; s.pat = null; } },
+  // frames(event):登记帧事件源 —— 每帧经 fireJson 回灌 event<group> 载荷 {dt, t}(游戏时钟,取代 delay 链)。
+  host_game_frames: (evid)        => { if (G) G.frameEvs.push(evid); },
 }};
 
 const mem = () => X.memory.buffer;
