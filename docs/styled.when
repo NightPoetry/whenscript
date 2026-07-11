@@ -1,0 +1,96 @@
+import { create, setText, setAttr, setStyle, append, on } from "dom";
+
+// ══ 卡片容器:渐变底 + 圆角 + 阴影 ══
+number card = create("div");
+setStyle(card, "max-width", "320px");
+setStyle(card, "margin", "48px auto");
+setStyle(card, "padding", "28px");
+setStyle(card, "border-radius", "20px");
+setStyle(card, "background", "linear-gradient(135deg, #ffffff, #eef2ff)");
+setStyle(card, "box-shadow", "0 14px 36px rgba(60,80,180,0.18)");
+setStyle(card, "font-family", "system-ui, -apple-system, sans-serif");
+
+// ══ 商品图(emoji 占位)+ 标题 + 单价 ══
+number pic = create("div");
+setText(pic, "🎧");
+setStyle(pic, "font-size", "76px");
+setStyle(pic, "text-align", "center");
+
+number name = create("h2");
+setText(name, "无线降噪耳机");
+setStyle(name, "margin", "10px 0 2px");
+setStyle(name, "text-align", "center");
+setStyle(name, "color", "#1a2b50");
+
+number priceTag = create("div");
+setText(priceTag, "单价 ¥50");
+setStyle(priceTag, "text-align", "center");
+setStyle(priceTag, "color", "#8a93a8");
+setStyle(priceTag, "margin-bottom", "22px");
+
+// ══ 数量控制行:flex 居中 + 圆形按钮 ══
+number row = create("div");
+setStyle(row, "display", "flex");
+setStyle(row, "align-items", "center");
+setStyle(row, "justify-content", "center");
+setStyle(row, "gap", "20px");
+
+number minus = create("button");
+number qtyView = create("div");
+number plus = create("button");
+setAttr(minus, "id", "minus");  setAttr(plus, "id", "plus");  setAttr(qtyView, "id", "qty");
+setText(minus, "−");  setText(plus, "+");  setText(qtyView, "1");
+
+setStyle(minus, "width", "46px");  setStyle(minus, "height", "46px");
+setStyle(minus, "border-radius", "50%");  setStyle(minus, "border", "none");
+setStyle(minus, "font-size", "24px");  setStyle(minus, "cursor", "pointer");
+setStyle(minus, "background", "#e8edff");  setStyle(minus, "color", "#3a55d8");
+setStyle(plus, "width", "46px");  setStyle(plus, "height", "46px");
+setStyle(plus, "border-radius", "50%");  setStyle(plus, "border", "none");
+setStyle(plus, "font-size", "24px");  setStyle(plus, "cursor", "pointer");
+setStyle(plus, "background", "#3a55d8");  setStyle(plus, "color", "white");
+setStyle(qtyView, "font-size", "22px");  setStyle(qtyView, "min-width", "30px");
+setStyle(qtyView, "text-align", "center");  setStyle(qtyView, "font-weight", "600");
+append(row, minus);  append(row, qtyView);  append(row, plus);
+
+// ══ 总计 + 满减徽章 ══
+number totalView = create("div");
+setAttr(totalView, "id", "total");
+setStyle(totalView, "text-align", "center");
+setStyle(totalView, "font-size", "30px");
+setStyle(totalView, "font-weight", "700");
+setStyle(totalView, "margin-top", "24px");
+
+number badge = create("div");
+setAttr(badge, "id", "badge");
+setStyle(badge, "text-align", "center");
+setStyle(badge, "margin-top", "6px");
+setStyle(badge, "font-size", "14px");
+
+append(card, pic);  append(card, name);  append(card, priceTag);
+append(card, row);  append(card, totalView);  append(card, badge);
+
+// ══ 反应式:点 +/- → 数量/总价/颜色/徽章 全自动 ══
+number price = 50;
+number qty   = 1;
+number total := price * qty;
+string totalColor := if (total > 300) { "#d6336c" } else { "#1a2b50" };
+string badgeText  := if (total > 300) { "🔥 已享满减优惠" } else { "满 ¥300 减 ¥30" };
+string badgeColor := if (total > 300) { "#d6336c" } else { "#8a93a8" };
+
+event<group> inc;
+event<group> dec;
+on(plus,  "click", inc);
+on(minus, "click", dec);
+when(inc) { qty = qty + 1; }
+when(dec) { if (qty > 1) { qty = qty - 1; } }
+
+changed(qty)   { setText(qtyView, "" + qty); }
+changed(total) {
+  setText(totalView, "¥" + total);
+  setStyle(totalView, "color", totalColor);
+  setText(badge, badgeText);
+  setStyle(badge, "color", badgeColor);
+}
+setText(totalView, "¥50");
+setText(badge, "满 ¥300 减 ¥30");

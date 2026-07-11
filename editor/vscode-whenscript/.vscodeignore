@@ -1,0 +1,6 @@
+.vscode/**
+.gitignore
+**/*.map
+demo.when
+scripts/**
+发布指南.md

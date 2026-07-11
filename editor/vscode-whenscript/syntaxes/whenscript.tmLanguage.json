@@ -1,0 +1,326 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "WhenScript",
+  "scopeName": "source.whenscript",
+  "fileTypes": ["when"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#reactive-binding-operator" },
+    { "include": "#entity-declaration" },
+    { "include": "#refined-type" },
+    { "include": "#colon-modifier" },
+    { "include": "#keywords-reactive" },
+    { "include": "#keywords-control" },
+    { "include": "#keywords-declaration" },
+    { "include": "#keywords-other" },
+    { "include": "#constants" },
+    { "include": "#container-names" },
+    { "include": "#function-calls" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.whenscript",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.whenscript",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.whenscript",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.whenscript",
+          "match": "\\\\(n|t|r|0|\"|\\\\|\\$)"
+        },
+        {
+          "name": "meta.interpolation.whenscript",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.template-expression.begin.whenscript" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.template-expression.end.whenscript" }
+          },
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#strings" },
+            { "include": "#numbers" },
+            { "include": "#reactive-binding-operator" },
+            { "include": "#refined-type" },
+            { "include": "#keywords-reactive" },
+            { "include": "#keywords-control" },
+            { "include": "#keywords-declaration" },
+            { "include": "#keywords-other" },
+            { "include": "#constants" },
+            { "include": "#function-calls" },
+            { "include": "#operators" },
+            { "include": "#punctuation" }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.whenscript",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.whenscript",
+          "match": "\\b0[bB][01]+\\b"
+        },
+        {
+          "name": "constant.numeric.float.whenscript",
+          "match": "\\b[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?\\b|\\b[0-9]+[eE][+-]?[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.decimal.whenscript",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    "reactive-binding-operator": {
+      "name": "keyword.operator.reactive.whenscript",
+      "match": ":="
+    },
+    "colon-modifier": {
+      "comment": "`type:modifier` colon-attached config slot, e.g. turn:on, copy:deep, number<string>:2, event:uncover",
+      "match": "(:)\\s*(on|off|deep|shallow|up|down|half|even)\\b",
+      "captures": {
+        "1": { "name": "punctuation.separator.colon-modifier.whenscript" },
+        "2": { "name": "support.constant.modifier.whenscript" }
+      }
+    },
+    "entity-declaration": {
+      "comment": "group name = { ... } [until( ... )] — a reactive entity when the body contains when/changed, otherwise a plain data literal. Highlighted the same either way; `until` is matched as a reactive keyword.",
+      "match": "\\b(group)\\b(\\s+)([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "storage.type.whenscript" },
+        "3": { "name": "entity.name.type.whenscript" }
+      }
+    },
+    "refined-type": {
+      "comment": "number<int> / number<float> / number<string> / number<string>:2 / event<group> / event<string>",
+      "begin": "\\b(number|event|group)(<)",
+      "beginCaptures": {
+        "1": { "name": "storage.type.whenscript" },
+        "2": { "name": "punctuation.definition.typeparameters.begin.whenscript" }
+      },
+      "end": ">",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.typeparameters.end.whenscript" }
+      },
+      "patterns": [
+        {
+          "name": "storage.type.whenscript",
+          "match": "\\b(int|float|string|group|number)\\b"
+        }
+      ]
+    },
+    "keywords-reactive": {
+      "patterns": [
+        {
+          "name": "keyword.control.reactive.when.whenscript",
+          "match": "\\bwhen\\b"
+        },
+        {
+          "name": "keyword.control.reactive.changed.whenscript",
+          "match": "\\bchanged\\b"
+        },
+        {
+          "name": "keyword.control.reactive.assigned.whenscript",
+          "match": "\\bassigned\\b"
+        },
+        {
+          "name": "keyword.control.reactive.once.whenscript",
+          "match": "\\bonce\\b"
+        },
+        {
+          "name": "keyword.control.reactive.until.whenscript",
+          "match": "\\buntil\\b"
+        },
+        {
+          "name": "keyword.control.reactive.guard.whenscript",
+          "match": "\\bguard\\b"
+        },
+        {
+          "name": "keyword.control.reactive.with.whenscript",
+          "match": "\\bwith\\b"
+        },
+        {
+          "name": "keyword.control.reactive.hook.whenscript",
+          "match": "\\b(before|after)\\b"
+        },
+        {
+          "name": "keyword.other.emit.whenscript",
+          "match": "\\bemit\\b"
+        }
+      ]
+    },
+    "keywords-control": {
+      "patterns": [
+        {
+          "name": "keyword.control.conditional.whenscript",
+          "match": "\\b(if|else|switch|case|default)\\b"
+        },
+        {
+          "name": "keyword.control.loop.whenscript",
+          "match": "\\b(while|for|each)\\b"
+        },
+        {
+          "name": "keyword.control.flow.whenscript",
+          "match": "\\b(return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.control.import.whenscript",
+          "match": "\\b(import|export|from)\\b"
+        }
+      ]
+    },
+    "keywords-declaration": {
+      "patterns": [
+        {
+          "name": "storage.type.whenscript",
+          "match": "\\b(number|string|bool|group|byte|bit|void|event)\\b"
+        },
+        {
+          "name": "storage.type.function.whenscript",
+          "match": "\\bfunction\\b"
+        },
+        {
+          "name": "storage.modifier.whenscript",
+          "match": "\\bvar\\b"
+        }
+      ]
+    },
+    "keywords-other": {
+      "patterns": [
+        {
+          "name": "keyword.other.delete.whenscript",
+          "match": "\\b(delete|drop)\\b"
+        },
+        {
+          "name": "keyword.other.copy.whenscript",
+          "match": "\\bcopy\\b"
+        },
+        {
+          "name": "keyword.other.turn.whenscript",
+          "match": "\\bturn\\b"
+        },
+        {
+          "name": "variable.language.self.whenscript",
+          "match": "\\bself\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.whenscript",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.unknown.whenscript",
+          "match": "\\bunknown\\b"
+        }
+      ]
+    },
+    "container-names": {
+      "comment": "front-end (feature web) container syntax: PascalCase container calls (Box/Row/Column/Grid/...) and the `container` contextual keyword used to declare one.",
+      "patterns": [
+        {
+          "name": "keyword.other.container.whenscript",
+          "match": "\\bcontainer\\b"
+        },
+        {
+          "name": "support.class.container.whenscript",
+          "match": "\\b[A-Z][A-Za-z0-9_]*(?=\\s*(\\{|\\())"
+        }
+      ]
+    },
+    "function-calls": {
+      "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.whenscript" }
+      }
+    },
+    "operators": {
+      "comment": "Order is load-bearing: TextMate alternation picks the FIRST matching alternative at a start position, not the longest, so every multi-char operator must be listed before any single-char operator that is one of its prefixes (e.g. `<<`/`>>` before bare `<`/`>`, `==`/`+=`/`=>` before bare `=`, `&&`/`||` before bare `&`/`|`).",
+      "patterns": [
+        {
+          "name": "keyword.operator.bitwise.shift.whenscript",
+          "match": "<<|>>"
+        },
+        {
+          "name": "keyword.operator.comparison.whenscript",
+          "match": "==|!=|<=|>="
+        },
+        {
+          "name": "keyword.operator.logical.whenscript",
+          "match": "&&|\\|\\|"
+        },
+        {
+          "name": "keyword.operator.assignment.compound.whenscript",
+          "match": "\\+="
+        },
+        {
+          "name": "keyword.operator.arrow.whenscript",
+          "match": "=>"
+        },
+        {
+          "name": "keyword.operator.comparison.whenscript",
+          "match": "<|>"
+        },
+        {
+          "name": "keyword.operator.logical.not.whenscript",
+          "match": "!"
+        },
+        {
+          "name": "keyword.operator.assignment.whenscript",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.bitwise.whenscript",
+          "match": "&|\\||\\^|~"
+        },
+        {
+          "name": "keyword.operator.arithmetic.whenscript",
+          "match": "\\+|-|\\*|/|%"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.terminator.statement.whenscript",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.separator.comma.whenscript",
+          "match": ","
+        },
+        {
+          "name": "punctuation.accessor.whenscript",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.separator.colon.whenscript",
+          "match": ":"
+        }
+      ]
+    }
+  }
+}

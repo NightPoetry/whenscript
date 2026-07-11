@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhenScript — 写入,即触发</title>
+<meta name="description" content="WhenScript:事件驱动的强类型反应式脚本语言。无轮询、无手动订阅、无虚拟 DOM——值一变,依赖它的一切自己动。为人类与 AI 而生。">
+<link rel="icon" type="image/png" href="./icon.png">
+<style>
+  :root {
+    --bg: #1e1b2e;
+    --bg-deep: #171426;
+    --panel: #26213c;
+    --line: #3b3358;
+    --text: #ece8f8;
+    --dim: #a89fc8;
+    --signal: #ffb454;
+    --trace: #6fd9e7;
+    --arrow: #ff5fa2;
+    --ok: #89ca78;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+  }
+  a { color: var(--trace); text-decoration: none; }
+  a:hover { color: var(--signal); }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 2px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── 导航 ─────────────────────────────────────── */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(30, 27, 46, .88); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 22px; height: 58px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); }
+  .brand svg { display: block; }
+  nav .links { display: flex; gap: 18px; margin-left: auto; font-size: 14px; }
+  nav .links a { color: var(--dim); padding: 4px 2px; border-bottom: 2px solid transparent; }
+  nav .links a:hover { color: var(--text); border-bottom-color: var(--signal); }
+  nav .links a.cta { color: var(--signal); font-weight: 600; }
+
+  /* ── Hero ─────────────────────────────────────── */
+  header.hero { padding: 72px 0 56px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+
+  .eyebrow {
+    font: 12px/1 var(--mono); letter-spacing: .18em; text-transform: lowercase;
+    color: var(--signal); margin-bottom: 20px;
+  }
+  h1.display {
+    font-size: clamp(44px, 7vw, 76px); font-weight: 900; letter-spacing: .01em;
+    line-height: 1.15; margin: 0 0 10px;
+  }
+  h1 .underwave { position: relative; display: inline-block; }
+  h1 .underwave svg { position: absolute; left: 0; right: 0; bottom: -6px; width: 100%; height: 14px; overflow: visible; }
+  .hero-sub { font-size: 17px; color: var(--dim); max-width: 30em; margin: 18px 0 30px; }
+  .hero-sub strong { color: var(--text); font-weight: 600; }
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 12px 22px; border-radius: 10px; font-size: 15px; font-weight: 600;
+    border: 1px solid var(--line); color: var(--text); transition: transform .12s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--signal); border-color: var(--signal); color: #241c0a; }
+  .btn.primary:hover { background: #ffcb85; color: #241c0a; }
+  .btn.ghost:hover { border-color: var(--signal); color: var(--signal); }
+
+  /* ── 活演示卡(签名元素)────────────────────────── */
+  .live-card {
+    background: var(--bg-deep); border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.35);
+  }
+  .live-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+    font: 11px/1 var(--mono); letter-spacing: .12em; color: var(--dim);
+  }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #5c5480; }
+  .live-dot.on { background: var(--signal); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,180,84,.5); } 50% { box-shadow: 0 0 0 6px rgba(255,180,84,0); } }
+  .live-src {
+    margin: 0; padding: 14px 16px; overflow-x: auto;
+    font: 12.5px/1.6 var(--mono); tab-size: 2; white-space: pre;
+    border-bottom: 1px solid var(--line);
+  }
+  .live-stage { background: #fff; height: 190px; }
+  .live-stage iframe { display: block; width: 100%; height: 100%; border: none; }
+  .live-note { padding: 8px 14px; font: 11px/1.5 var(--mono); color: var(--dim); }
+  .live-note em { color: var(--signal); font-style: normal; }
+
+  /* 语法高亮(与 Playground 同一套 token 配色) */
+  .tok-comment  { color: #6f6a8a; font-style: italic; }
+  .tok-string   { color: var(--ok); }
+  .tok-interp   { color: var(--trace); }
+  .tok-number   { color: #d19a66; }
+  .tok-keyword  { color: #c586c0; }
+  .tok-reactive { color: var(--trace); font-weight: 600; }
+  .tok-arrow    { color: var(--arrow); font-weight: 700; }
+  .tok-pascal   { color: #e5c07b; }
+
+  /* ── 方波分隔线 ────────────────────────────────── */
+  .wave-divider { height: 24px; overflow: hidden; opacity: .55; }
+  .wave-divider svg { display: block; width: 100%; height: 24px; }
+  .wave-divider rect { animation: waveflow 2.4s linear infinite; }
+  @keyframes waveflow { from { transform: translateX(0); } to { transform: translateX(-48px); } }
+
+  /* ── 章节 ─────────────────────────────────────── */
+  section { padding: 64px 0; }
+  .sec-eyebrow { font: 12px/1 var(--mono); letter-spacing: .18em; color: var(--signal); margin-bottom: 10px; }
+  h2 { font-size: clamp(26px, 3.6vw, 36px); font-weight: 800; margin: 0 0 14px; line-height: 1.3; }
+  .sec-sub { color: var(--dim); max-width: 46em; margin-bottom: 36px; }
+
+  /* 哲学三卡(示波器通道) */
+  .ch-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .ch-grid { grid-template-columns: 1fr; } }
+  .ch-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 24px 22px; position: relative;
+  }
+  .ch-tag {
+    font: 11px/1 var(--mono); letter-spacing: .14em; color: var(--signal);
+    border: 1px solid var(--line); border-radius: 999px; display: inline-block;
+    padding: 5px 10px; margin-bottom: 16px; background: var(--bg-deep);
+  }
+  .ch-card h3 { margin: 0 0 8px; font-size: 18px; }
+  .ch-card p { margin: 0; font-size: 14px; color: var(--dim); }
+  .ch-card p code, .sec-sub code, td code {
+    font: .92em var(--mono); color: var(--trace);
+    background: var(--bg-deep); padding: 1px 6px; border-radius: 5px;
+  }
+
+  /* 代码对比 */
+  .vs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .vs-grid { grid-template-columns: 1fr; } }
+  .vs-col { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .vs-label {
+    padding: 10px 16px; font: 11px/1 var(--mono); letter-spacing: .12em;
+    color: var(--dim); border-bottom: 1px solid var(--line);
+  }
+  .vs-label.win { color: var(--signal); }
+  .vs-col pre { margin: 0; padding: 16px; overflow-x: auto; font: 13px/1.65 var(--mono); tab-size: 2; }
+  .vs-punch { margin-top: 22px; color: var(--dim); font-size: 15px; }
+  .vs-punch strong { color: var(--signal); }
+
+  /* 特性栅格 */
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .feat-grid { grid-template-columns: 1fr; } }
+  .feat {
+    border: 1px solid var(--line); border-radius: 12px; padding: 20px;
+    background: linear-gradient(160deg, var(--panel), var(--bg-deep));
+  }
+  .feat h3 { margin: 0 0 6px; font-size: 16px; }
+  .feat p { margin: 0; font-size: 13.5px; color: var(--dim); }
+
+  /* 安装 */
+  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .install-grid { grid-template-columns: 1fr; } }
+  .install-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  .install-card h3 { margin: 0 0 10px; font-size: 17px; }
+  .install-card p { color: var(--dim); font-size: 14px; margin: 0 0 14px; }
+  .cmd {
+    display: block; background: var(--bg-deep); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; font: 13px/1.5 var(--mono); color: var(--ok); overflow-x: auto; white-space: pre;
+  }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 32px 0 44px; margin-top: 30px;
+    color: var(--dim); font-size: 13px;
+  }
+  footer .wrap { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+  footer .spacer { flex: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wave-divider rect, .live-dot.on { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="./index.html" aria-label="WhenScript 首页">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect width="26" height="26" rx="6" fill="#171426"/>
+        <path d="M4 17 H8 V9 H13 V17 H18 V9 H22" fill="none" stroke="#ffb454" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      WhenScript
+    </a>
+    <div class="links">
+      <a href="./playground.html">Playground</a>
+      <a href="./examples.html">示例</a>
+      <a href="./docs.html">语法速览</a>
+      <a href="./contact.html">联系</a>
+      <a class="cta" href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code 扩展</a>
+      <a href="https://github.com/NightPoetry/whenscript" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">event-driven · strongly-typed · reactive</div>
+      <h1 class="display">写入,<br><span class="underwave">即触发。<svg viewBox="0 0 200 14" preserveAspectRatio="none" aria-hidden="true"><path d="M0 11 H25 V3 H50 V11 H75 V3 H100 V11 H125 V3 H150 V11 H175 V3 H200" fill="none" stroke="#ffb454" stroke-width="2.5"/></svg></span></h1>
+      <p class="hero-sub">WhenScript 是一门<strong>事件驱动的强类型反应式语言</strong>。没有轮询、没有手动订阅、没有虚拟 DOM——值一变,依赖它的一切自己动,像电流过电路。<strong>为人类与 AI 而生。</strong></p>
+      <div class="cta-row">
+        <a class="btn primary" href="./playground.html">▶ 在 Playground 试玩</a>
+        <a class="btn ghost" href="./examples.html">看示例画廊</a>
+        <a class="btn ghost" href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">装 VS Code 扩展</a>
+      </div>
+    </div>
+
+    <div class="live-card">
+      <div class="live-head">
+        <span class="live-dot" id="liveDot"></span>
+        <span id="liveLabel">BOOTING · 引擎加载中…</span>
+      </div>
+      <pre class="live-src"><code id="heroSrc">加载源码中…</code></pre>
+      <div class="live-stage" id="heroStage"></div>
+      <div class="live-note">上面这段 <em>.when</em> 源码,就是下面这块界面的全部——由 WhenScript 引擎(wasm)在你的浏览器里实时执行。</div>
+    </div>
+  </div>
+</header>
+
+<div class="wave-divider" aria-hidden="true">
+  <svg><defs><pattern id="sq" width="48" height="24" patternUnits="userSpaceOnUse">
+    <path d="M0 18 H12 V6 H24 V18 H36 V6 H48" fill="none" stroke="#ffb454" stroke-width="1.5"/>
+  </pattern></defs><rect x="0" y="0" width="200%" height="24" fill="url(#sq)"/></svg>
+</div>
+
+<section id="philosophy">
+  <div class="wrap">
+    <div class="sec-eyebrow">philosophy · 三条信号</div>
+    <h2>不是框架给你的反应式,<br>是语言本身的语义。</h2>
+    <div class="ch-grid">
+      <div class="ch-card">
+        <span class="ch-tag">CH1 · 事件</span>
+        <h3>一切皆事件</h3>
+        <p>赋值是事件,点击是事件,定时器到点是事件。<code>event&lt;T&gt;</code> 是一等值:可传递、可跨模块共享委托。引擎里没有一行轮询。</p>
+      </div>
+      <div class="ch-card">
+        <span class="ch-tag">CH2 · 电路</span>
+        <h3>组合逻辑电路模型</h3>
+        <p>派生值用 <code>:=</code> 持续绑定,像门电路接线。每次写入先让所有派生 settle 到不动点,再触发 <code>when</code>——读到的永远是一致的世界(glitch-free)。</p>
+      </div>
+      <div class="ch-card">
+        <span class="ch-tag">CH3 · 并发</span>
+        <h3>透明并发</h3>
+        <p>写代码像单线程,引擎自动并行执行读写集不冲突的反应,结果与串行完全一致——多核加速是实测过的,不是白皮书里的。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contrast" style="background: var(--bg-deep);">
+  <div class="wrap">
+    <div class="sec-eyebrow">before / after</div>
+    <h2>同一个需求,两种人生</h2>
+    <p class="sec-sub">「count 变了,把它的双倍显示出来」——在事件回调的世界里,你负责记得通知所有人;在 WhenScript 里,依赖关系就是语言结构。</p>
+    <div class="vs-grid">
+      <div class="vs-col">
+        <div class="vs-label">JAVASCRIPT · 手动流水线</div>
+        <pre><code>let count = 0, double = 0;
+const listeners = [];
+
+function setCount(v) {
+  count = v;
+  double = count * 2;   // 别忘了同步派生值
+  for (const fn of listeners)
+    fn();               // 别忘了通知所有人
+}
+
+btn.onclick = () =&gt; setCount(count + 1);
+listeners.push(() =&gt;
+  label.textContent = count + " / " + double);</code></pre>
+      </div>
+      <div class="vs-col">
+        <div class="vs-label win">WHENSCRIPT · 写入即触发</div>
+        <pre><code id="vsWhen">number count  = 0;
+number double := count * 2;   // 派生:自动跟着变
+
+when(add) { count = count + 1; }
+
+changed(count) {
+  setText(label, "${count} / ${double}");
+}</code></pre>
+      </div>
+    </div>
+    <p class="vs-punch">没有 setState、没有订阅列表、没有「忘了通知」这种 bug 类别——<strong>写入即触发是语义,不是纪律。</strong></p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-eyebrow">capabilities</div>
+    <h2>一门完整的语言,不是一个 DSL</h2>
+    <div class="feat-grid">
+      <div class="feat"><h3>强类型 + 类型转换格</h3><p>int &lt; float &lt; 高精度的精度阶。计算「升-算-降」不打扰你,赋值是唯一强制点;还有 <code>number&lt;string&gt;:2</code> 定点小数这样的冒号配置位。</p></div>
+      <div class="feat"><h3>反应式全家族</h3><p><code>when</code> 边沿触发、<code>changed</code> 每变必报、<code>once</code> 一次性、<code>until</code> 声明式生命周期、<code>:=</code> 持续绑定——按需选择,语义各就各位。</p></div>
+      <div class="feat"><h3>实体与确定性回收</h3><p><code>group</code> 圈定实体作用域,离开即回收,watcher 随作用域确定性销毁。没有 GC 暂停,也没有内存泄漏式订阅。</p></div>
+      <div class="feat"><h3>前端容器 + SSR 水合</h3><p>一切皆容器,布局就是 <code>:=</code> 电路,没有虚拟 DOM。服务端渲染 + 客户端水合闭环,同一份 .when 前后端同构。</p></div>
+      <div class="feat"><h3>静默失效零容忍</h3><p>语法错在执行前响亮报错,语义错带行列号,非法运算给出指名道姓的警告。「改了数据界面没动」这类 bug 在引擎层面被当作最高级别的罪。</p></div>
+      <div class="feat"><h3>工具链全家桶</h3><p><code>check</code> 静态诊断、<code>fmt</code> 保真格式化、LSP(诊断/悬停/补全)、REPL、<code>pkg</code> 去中心化包管理、<code>graph</code> 运行时依赖图,外加 VS Code 扩展。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="install" style="background: var(--bg-deep);">
+  <div class="wrap">
+    <div class="sec-eyebrow">get started</div>
+    <h2>三十秒上手</h2>
+    <div class="install-grid">
+      <div class="install-card">
+        <h3>先在浏览器里玩</h3>
+        <p>不装任何东西,Playground 里改一个值,看界面自己动。</p>
+        <a class="btn primary" href="./playground.html">打开 Playground</a>
+      </div>
+      <div class="install-card">
+        <h3>VS Code 扩展</h3>
+        <p>语法高亮、诊断、悬停文档、代码片段一应俱全。</p>
+        <code class="cmd">code --install-extension whenscript-lang.whenscript</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 WhenScript · 写入,即触发</span>
+    <span class="spacer"></span>
+    <a href="./contact.html">联系我们</a>
+    <a href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code Marketplace</a>
+    <a href="https://github.com/NightPoetry/whenscript" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+<script>
+  // ── 首屏活演示:取 hero.when → 高亮展示源码 → 开 runner iframe 真跑 ──────────
+  const REACTIVE_WORDS = "when|changed|assigned|once|until|guard|with|emit|event";
+  const KEYWORD_WORDS =
+    "number|string|bool|group|byte|bit|function|return|void|import|export|from|" +
+    "break|each|if|else|while|for|var|switch|case|default|true|false|unknown|" +
+    "before|after|delete|drop|copy|self|turn|container";
+  const TOKEN_RE = new RegExp([
+    "(?<comment>/\\*[\\s\\S]*?\\*/|//[^\\n]*)",
+    '(?<string>"(?:\\\\.|[^"\\\\])*")',
+    "(?<number>\\b(?:0[xX][0-9a-fA-F]+|\\d+\\.\\d+|\\d+)\\b)",
+    "(?<arrow>:=)",
+    "(?<reactive>\\b(?:" + REACTIVE_WORDS + ")\\b)",
+    "(?<keyword>\\b(?:" + KEYWORD_WORDS + ")\\b)",
+    "(?<pascal>\\b[A-Z][A-Za-z0-9_]*\\b)",
+  ].join("|"), "g");
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function hlString(raw) {
+    const re = /\$\{[^}]*\}/g; let out = "", last = 0, m;
+    while ((m = re.exec(raw))) {
+      if (m.index > last) out += '<span class="tok-string">' + esc(raw.slice(last, m.index)) + '</span>';
+      out += '<span class="tok-interp">' + esc(m[0]) + '</span>';
+      last = m.index + m[0].length;
+    }
+    if (last < raw.length) out += '<span class="tok-string">' + esc(raw.slice(last)) + '</span>';
+    return out;
+  }
+  function highlight(src) {
+    let out = "", last = 0, m; TOKEN_RE.lastIndex = 0;
+    while ((m = TOKEN_RE.exec(src))) {
+      if (m.index > last) out += esc(src.slice(last, m.index));
+      const g = m.groups;
+      if (g.comment !== undefined) out += '<span class="tok-comment">' + esc(g.comment) + '</span>';
+      else if (g.string !== undefined) out += hlString(g.string);
+      else if (g.number !== undefined) out += '<span class="tok-number">' + esc(g.number) + '</span>';
+      else if (g.arrow !== undefined) out += '<span class="tok-arrow">:=</span>';
+      else if (g.reactive !== undefined) out += '<span class="tok-reactive">' + esc(g.reactive) + '</span>';
+      else if (g.keyword !== undefined) out += '<span class="tok-keyword">' + esc(g.keyword) + '</span>';
+      else if (g.pascal !== undefined) out += '<span class="tok-pascal">' + esc(g.pascal) + '</span>';
+      last = m.index + m[0].length;
+      if (m[0].length === 0) TOKEN_RE.lastIndex++;
+    }
+    return out + esc(src.slice(last));
+  }
+
+  (async () => {
+    const srcEl = document.getElementById("heroSrc");
+    const dot = document.getElementById("liveDot");
+    const label = document.getElementById("liveLabel");
+    try {
+      const res = await fetch("./hero.when");
+      const full = await res.text();
+      // 展示时去掉头两行注释/import,聚焦语言本身;运行仍用完整源码
+      const shown = full.split("\n").filter(l => !l.startsWith("// 官网")).join("\n").trim();
+      srcEl.innerHTML = highlight(shown);
+
+      const iframe = document.createElement("iframe");
+      iframe.title = "WhenScript 活演示";
+      iframe.addEventListener("load", () => {
+        iframe.contentWindow.postMessage({ type: "run", source: full }, "*");
+      });
+      window.addEventListener("message", (ev) => {
+        if (ev.source !== iframe.contentWindow || !ev.data) return;
+        if (ev.data.type === "ready") { dot.classList.add("on"); label.textContent = "LIVE · WhenScript 正在这个页面里运行"; }
+        if (ev.data.type === "output" && ev.data.isError) { label.textContent = "ERROR · " + ev.data.text.slice(0, 60); }
+      });
+      document.getElementById("heroStage").appendChild(iframe);
+      iframe.src = "./playground-runner.html";
+    } catch (e) {
+      srcEl.textContent = "演示加载失败:" + (e && e.message ? e.message : e);
+    }
+  })();
+</script>
+</body>
+</html>

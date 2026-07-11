@@ -1,0 +1,95 @@
+{
+  "when (reactive)": {
+    "prefix": "when",
+    "body": [
+      "when(${1:condition}) {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "反应式 when：条件从 false 变为 true 时触发一次（边缘触发）"
+  },
+  "when with (event listener)": {
+    "prefix": "whenwith",
+    "body": [
+      "when(${1:eventName}) with(${2:type} ${3:payload}) {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "订阅一个事件（event-when），带类型化 payload 参数"
+  },
+  "changed": {
+    "prefix": "changed",
+    "body": [
+      "changed(${1:expr}) (${2:old}, ${3:now}) => {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "值变化就触发（不同于 when 的边缘触发，changed 每次变化都通知）"
+  },
+  "event declaration": {
+    "prefix": "event",
+    "body": [
+      "event<${1:string}> ${2:name};"
+    ],
+    "description": "声明一个命名事件（委托），类型参数如 string / number / group"
+  },
+  "emit": {
+    "prefix": "emit",
+    "body": [
+      "emit ${1:eventName}(${2:payload});"
+    ],
+    "description": "触发一个事件，携带 payload"
+  },
+  "group entity": {
+    "prefix": "group",
+    "body": [
+      "group ${1:name} = {",
+      "\t${1:name}.${2:field} = ${3:0};",
+      "",
+      "\twhen(${1:name}.${2:field} ${4:>} ${5:value}) {",
+      "\t\t${0}",
+      "\t}",
+      "}"
+    ],
+    "description": "反应式实体：group + 自己的反应式作用域（body 内含 when/changed）"
+  },
+  "group until (lifetime)": {
+    "prefix": "groupuntil",
+    "body": [
+      "group ${1:name} = {",
+      "\t${0}",
+      "} until(${2:condition});"
+    ],
+    "description": "带确定性生命周期的实体：cond 成立即自动 delete，无需 GC"
+  },
+  "function": {
+    "prefix": "function",
+    "body": [
+      "${1:void} ${2:name}(${3:params}) {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "函数声明（返回类型可为 number/string/bool/group/void/...）"
+  },
+  "import": {
+    "prefix": "import",
+    "body": [
+      "import { ${1:name} } from \"${2:module}\";"
+    ],
+    "description": "从模块导入绑定"
+  },
+  "switch (value match)": {
+    "prefix": "switch",
+    "body": [
+      "switch (${1:value}) {",
+      "\tcase ${2:a} {",
+      "\t\t${0}",
+      "\t}",
+      "\tdefault {",
+      "\t\t${3}",
+      "\t}",
+      "};"
+    ],
+    "description": "值匹配表达式：case 用花括号、不是冒号；无 fall-through，不需要 break；作为语句独立使用时句尾要加分号"
+  }
+}

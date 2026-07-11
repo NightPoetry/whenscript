@@ -1,0 +1,15 @@
+{
+  "iconDefinitions": {
+    "_whenscript_when_file": { "iconPath": "./when-file.svg" },
+    "_whenscript_file": { "iconPath": "./generic-file.svg" },
+    "_whenscript_folder": { "iconPath": "./generic-folder.svg" },
+    "_whenscript_folder_open": { "iconPath": "./generic-folder-open.svg" }
+  },
+  "file": "_whenscript_file",
+  "folder": "_whenscript_folder",
+  "folderExpanded": "_whenscript_folder_open",
+  "fileExtensions": {
+    "when": "_whenscript_when_file"
+  },
+  "hidesExplorerArrows": false
+}

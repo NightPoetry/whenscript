@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>联系 · WhenScript</title>
+<meta name="description" content="联系 WhenScript 团队:反馈 bug、提问、合作。">
+<link rel="icon" type="image/png" href="./icon.png">
+<style>
+  :root {
+    --bg: #1e1b2e;
+    --bg-deep: #171426;
+    --panel: #26213c;
+    --line: #3b3358;
+    --text: #ece8f8;
+    --dim: #a89fc8;
+    --signal: #ffb454;
+    --trace: #6fd9e7;
+    --arrow: #ff5fa2;
+    --ok: #89ca78;
+    --err: #ff7a90;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+  }
+  a { color: var(--trace); text-decoration: none; }
+  a:hover { color: var(--signal); }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 2px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── 导航(与 index.html 同一套)───────────────── */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(30, 27, 46, .88); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 22px; height: 58px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); }
+  .brand svg { display: block; }
+  nav .links { display: flex; gap: 18px; margin-left: auto; font-size: 14px; flex-wrap: wrap; }
+  nav .links a { color: var(--dim); padding: 4px 2px; border-bottom: 2px solid transparent; }
+  nav .links a:hover { color: var(--text); border-bottom-color: var(--signal); }
+  nav .links a.active { color: var(--text); border-bottom-color: var(--signal); }
+  nav .links a.cta { color: var(--signal); font-weight: 600; }
+
+  header.page-head { padding: 56px 0 8px; }
+  .eyebrow {
+    font: 12px/1 var(--mono); letter-spacing: .18em; text-transform: lowercase;
+    color: var(--signal); margin-bottom: 16px;
+  }
+  h1.display { font-size: clamp(34px, 5vw, 52px); font-weight: 900; line-height: 1.2; margin: 0 0 12px; }
+  .page-sub { color: var(--dim); max-width: 40em; margin: 0; }
+  .page-sub strong { color: var(--text); font-weight: 600; }
+
+  section { padding: 40px 0 72px; }
+
+  /* ── 替代渠道卡(与 index 安装卡同款)──────────── */
+  .alt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; max-width: 780px; }
+  @media (max-width: 760px) { .alt-grid { grid-template-columns: 1fr; } }
+  .alt-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  .alt-card h3 { margin: 0 0 10px; font-size: 17px; }
+  .alt-card p { color: var(--dim); font-size: 14px; margin: 0 0 16px; }
+  .alt-tag {
+    font: 11px/1 var(--mono); letter-spacing: .14em; color: var(--signal);
+    border: 1px solid var(--line); border-radius: 999px; display: inline-block;
+    padding: 5px 10px; margin-bottom: 14px; background: var(--bg-deep);
+  }
+  .alt-tag.soon { color: var(--dim); }
+  .btn {
+    display: inline-block; padding: 11px 20px; border-radius: 10px; font-size: 14px; font-weight: 600;
+    border: 1px solid var(--line); color: var(--text); transition: transform .12s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--signal); border-color: var(--signal); color: #241c0a; }
+  .btn.primary:hover { background: #ffcb85; color: #241c0a; }
+  .soon-line { font: 13px/1.6 var(--mono); color: var(--dim); }
+
+  /* ── 表单 ─────────────────────────────────────── */
+  form#contactForm { max-width: 560px; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 13.5px; color: var(--dim); margin-bottom: 6px; }
+  .field input, .field textarea {
+    width: 100%; background: var(--bg-deep); border: 1px solid var(--line); border-radius: 8px;
+    padding: 11px 13px; color: var(--text); font: 14px/1.6 inherit; font-family: inherit;
+  }
+  .field textarea { min-height: 140px; resize: vertical; }
+  .field input:focus, .field textarea:focus { outline: none; border-color: var(--signal); }
+  /* 蜜罐:对人不可见不可达,机器人会傻乎乎填上 */
+  .hp-field {
+    position: absolute !important; left: -9999px !important; top: -9999px !important;
+    width: 1px; height: 1px; overflow: hidden; opacity: 0;
+  }
+  #formStatus { margin-top: 14px; font-size: 14px; min-height: 1.6em; }
+  #formStatus.ok { color: var(--ok); }
+  #formStatus.err { color: var(--err); }
+  #formStatus.busy { color: var(--dim); }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 32px 0 44px; margin-top: 30px;
+    color: var(--dim); font-size: 13px;
+  }
+  footer .wrap { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+  footer .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="./index.html" aria-label="WhenScript 首页">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect width="26" height="26" rx="6" fill="#171426"/>
+        <path d="M4 17 H8 V9 H13 V17 H18 V9 H22" fill="none" stroke="#ffb454" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      WhenScript
+    </a>
+    <div class="links">
+      <a href="./playground.html">Playground</a>
+      <a href="./examples.html">示例</a>
+      <a href="./docs.html">语法速览</a>
+      <a href="./contact.html" class="active">联系</a>
+      <a class="cta" href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code 扩展</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">contact · 说句话</div>
+    <h1 class="display">联系我们</h1>
+    <p class="page-sub">发现 bug、语法有疑问、想聊合作——都欢迎。<strong>报 bug 时带上能复现的 .when 片段</strong>(Playground 链接最好),我们处理起来最快。</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+
+    <!-- 表单:CONTACT_ENDPOINT 配置好之前隐藏,由页脚脚本控制 -->
+    <form id="contactForm" hidden novalidate>
+      <div class="field">
+        <label for="fName">姓名</label>
+        <input id="fName" name="name" type="text" required maxlength="80" autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="fEmail">邮箱(用于回信)</label>
+        <input id="fEmail" name="email" type="email" required maxlength="120" autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="fMessage">留言</label>
+        <textarea id="fMessage" name="message" required maxlength="4000" placeholder="bug 复现步骤 / 问题 / 合作意向……"></textarea>
+      </div>
+      <div class="hp-field" aria-hidden="true">
+        <label for="fWebsite">请勿填写</label>
+        <input id="fWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+      </div>
+      <button class="btn primary" type="submit" id="sendBtn">发送留言</button>
+      <div id="formStatus" role="status" aria-live="polite"></div>
+    </form>
+
+    <!-- 替代渠道:留言端点开通之前的两条路 -->
+    <div id="altChannels">
+      <div class="alt-grid">
+        <div class="alt-card">
+          <span class="alt-tag">now · 现在就能用</span>
+          <h3>VS Code Marketplace Q&amp;A</h3>
+          <p>扩展页自带问答区:报 bug、提问都行,回复公开可查,后来人也能搜到同款问题。</p>
+          <a class="btn primary" href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript&amp;ssr=false#qna" target="_blank" rel="noopener">去 Q&amp;A 提问</a>
+        </div>
+        <div class="alt-card">
+          <span class="alt-tag soon">soon · 即将开通</span>
+          <h3>联系邮箱</h3>
+          <p>专用联系邮箱正在开通中,开通后这里会换成直达表单——留言直接进我们的收件箱。</p>
+          <span class="soon-line">coming soon…</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 WhenScript · 写入,即触发</span>
+    <span class="spacer"></span>
+    <a href="./contact.html">联系我们</a>
+    <a href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code Marketplace</a>
+  </div>
+</footer>
+
+<script>
+  // 留言收件端点:部署好接收服务后把 URL 填进来。
+  // 为空 = 表单隐藏、显示替代渠道;非空 = 显示表单,提交时 POST JSON {name, email, message}。
+  const CONTACT_ENDPOINT = "";
+
+  const form = document.getElementById("contactForm");
+  const alt = document.getElementById("altChannels");
+  const statusEl = document.getElementById("formStatus");
+  const sendBtn = document.getElementById("sendBtn");
+
+  if (CONTACT_ENDPOINT) {
+    form.hidden = false;
+    alt.hidden = true;
+  }
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = cls || "";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    // 蜜罐字段有内容 = 机器人:装作成功,直接吞掉
+    if (document.getElementById("fWebsite").value) {
+      setStatus("已发送,谢谢你的留言。", "ok");
+      form.reset();
+      return;
+    }
+
+    const name = document.getElementById("fName").value.trim();
+    const email = document.getElementById("fEmail").value.trim();
+    const message = document.getElementById("fMessage").value.trim();
+    if (!name || !email || !message) {
+      setStatus("姓名、邮箱、留言都要填一下。", "err");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus("邮箱格式看起来不对,检查一下?", "err");
+      return;
+    }
+
+    sendBtn.disabled = true;
+    setStatus("发送中…", "busy");
+    try {
+      const res = await fetch(CONTACT_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      setStatus("已收到你的留言,我们会尽快回信到 " + email + "。", "ok");
+      form.reset();
+    } catch (err) {
+      setStatus("发送失败(网络或服务端问题),请稍后重试;急事可先去 VS Code Marketplace 的 Q&A 留言。", "err");
+      alt.hidden = false;
+    } finally {
+      sendBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

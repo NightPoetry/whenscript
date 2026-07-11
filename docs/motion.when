@@ -1,0 +1,62 @@
+// 商用缺口 #4 demo —— 动画编排(Web Animations API 原语 animate)。
+// v120 的 ws-base 默认过渡 = "值变即动"的地基;#4 补【任意关键帧 + 时序编排(错峰/时间线)+ 弹簧缓动】。
+// animate(el, keyframes, options):keyframes=关键帧组列表、options=时序组(duration/easing/delay/…),
+// 都是普通 group,序列化成 JSON 交浏览器原生动画引擎。delay 做错峰入场;spring 式 cubic-bezier 做回弹。
+import { create, setText, setAttr, setStyle, append, on, animate } from "dom";
+
+number app = create("div");
+setStyle(app, "maxWidth", "560px");
+setStyle(app, "margin", "24px auto");
+setStyle(app, "font", "15px system-ui, sans-serif");
+
+number title = create("h2");
+setAttr(title, "id", "title");
+setText(title, "动画编排 · WAAPI");
+setStyle(title, "display", "inline-block");
+append(app, title);
+
+number btn = create("button");
+setAttr(btn, "id", "play");
+setText(btn, "▶ 播放错峰入场 + 弹簧");
+setStyle(btn, "display", "block");
+setStyle(btn, "margin", "12px 0 18px");
+setStyle(btn, "padding", "10px 16px");
+setStyle(btn, "borderRadius", "8px");
+setStyle(btn, "border", "1px solid #6366f1");
+setStyle(btn, "background", "#eef2ff");
+append(app, btn);
+
+// 三张卡片(初始透明,播放时错峰淡入 + 上滑)
+number row = create("div");
+setStyle(row, "display", "flex");
+setStyle(row, "gap", "12px");
+append(app, row);
+
+number c1 = create("div");  setAttr(c1, "id", "c1");
+number c2 = create("div");  setAttr(c2, "id", "c2");
+number c3 = create("div");  setAttr(c3, "id", "c3");
+setText(c1, "卡片 1");  setText(c2, "卡片 2");  setText(c3, "卡片 3");
+// 统一样式(逐个设,保持简单)
+setStyle(c1, "flex", "1");  setStyle(c1, "padding", "24px 12px");  setStyle(c1, "borderRadius", "10px");
+setStyle(c1, "background", "#6366f1");  setStyle(c1, "color", "white");  setStyle(c1, "textAlign", "center");  setStyle(c1, "opacity", "0");
+setStyle(c2, "flex", "1");  setStyle(c2, "padding", "24px 12px");  setStyle(c2, "borderRadius", "10px");
+setStyle(c2, "background", "#8b5cf6");  setStyle(c2, "color", "white");  setStyle(c2, "textAlign", "center");  setStyle(c2, "opacity", "0");
+setStyle(c3, "flex", "1");  setStyle(c3, "padding", "24px 12px");  setStyle(c3, "borderRadius", "10px");
+setStyle(c3, "background", "#a855f7");  setStyle(c3, "color", "white");  setStyle(c3, "textAlign", "center");  setStyle(c3, "opacity", "0");
+append(row, c1);  append(row, c2);  append(row, c3);
+
+// 关键帧组:淡入 + 上滑(任意关键帧,不是预设)
+group fadeUp = [ {opacity: "0", transform: "translateY(28px)"}, {opacity: "1", transform: "translateY(0)"} ];
+// 弹簧回弹关键帧:标题被"弹"一下(spring 缓动靠 cubic-bezier 过冲)
+group bounce = [ {transform: "scale(1)"}, {transform: "scale(1.25)"}, {transform: "scale(1)"} ];
+
+event<group> play;
+on(btn, "click", play);
+when(play) {
+  // 错峰入场:同一关键帧,delay 递增 → 时间线编排(卡片一个接一个飞入)
+  animate(c1, fadeUp, {duration: 500, easing: "ease-out", delay: 0,   fill: "both"});
+  animate(c2, fadeUp, {duration: 500, easing: "ease-out", delay: 120, fill: "both"});
+  animate(c3, fadeUp, {duration: 500, easing: "ease-out", delay: 240, fill: "both"});
+  // 弹簧回弹:cubic-bezier 过冲 = spring 手感
+  animate(title, bounce, {duration: 600, easing: "cubic-bezier(.34, 1.56, .64, 1)"});
+}

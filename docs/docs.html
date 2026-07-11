@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语法速览 · WhenScript</title>
+<meta name="description" content="WhenScript 语法速览:类型与变量、反应式家族 when/changed/once/:=、event 委托、group 实体与 until、函数与 with、模块、前端容器语法、工具链命令,一页看完。">
+<link rel="icon" type="image/png" href="./icon.png">
+<style>
+  :root {
+    --bg: #1e1b2e;
+    --bg-deep: #171426;
+    --panel: #26213c;
+    --line: #3b3358;
+    --text: #ece8f8;
+    --dim: #a89fc8;
+    --signal: #ffb454;
+    --trace: #6fd9e7;
+    --arrow: #ff5fa2;
+    --ok: #89ca78;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+  }
+  a { color: var(--trace); text-decoration: none; }
+  a:hover { color: var(--signal); }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 2px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── 导航(与 index.html 同一套)───────────────── */
+  nav.top {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(30, 27, 46, .88); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.top .wrap { display: flex; align-items: center; gap: 22px; height: 58px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); }
+  .brand svg { display: block; }
+  nav.top .links { display: flex; gap: 18px; margin-left: auto; font-size: 14px; flex-wrap: wrap; }
+  nav.top .links a { color: var(--dim); padding: 4px 2px; border-bottom: 2px solid transparent; }
+  nav.top .links a:hover { color: var(--text); border-bottom-color: var(--signal); }
+  nav.top .links a.active { color: var(--text); border-bottom-color: var(--signal); }
+  nav.top .links a.cta { color: var(--signal); font-weight: 600; }
+
+  /* ── 页头 ─────────────────────────────────────── */
+  header.page-head { padding: 56px 0 12px; }
+  .eyebrow {
+    font: 12px/1 var(--mono); letter-spacing: .18em; text-transform: lowercase;
+    color: var(--signal); margin-bottom: 16px;
+  }
+  h1.display { font-size: clamp(34px, 5vw, 52px); font-weight: 900; line-height: 1.2; margin: 0 0 12px; }
+  .page-sub { color: var(--dim); max-width: 44em; margin: 0; }
+  .page-sub strong { color: var(--text); font-weight: 600; }
+
+  /* ── 目录 + 正文双栏 ───────────────────────────── */
+  .docs-layout {
+    display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 44px;
+    align-items: start; padding: 40px 0 64px;
+  }
+  @media (max-width: 900px) { .docs-layout { grid-template-columns: 1fr; gap: 28px; } }
+  aside.toc { position: sticky; top: 78px; }
+  @media (max-width: 900px) { aside.toc { position: static; } }
+  .toc-tag { font: 11px/1 var(--mono); letter-spacing: .16em; color: var(--dim); text-transform: uppercase; margin-bottom: 10px; }
+  .toc a {
+    display: block; color: var(--dim); font-size: 13.5px;
+    padding: 5px 12px; border-left: 2px solid var(--line);
+  }
+  .toc a:hover { color: var(--signal); border-left-color: var(--signal); }
+  .toc a code { font: .95em var(--mono); }
+
+  /* ── 分节 ─────────────────────────────────────── */
+  .doc-sec { margin-bottom: 60px; }
+  .doc-sec:last-child { margin-bottom: 0; }
+  .sec-eyebrow { font: 12px/1 var(--mono); letter-spacing: .18em; color: var(--signal); margin-bottom: 8px; }
+  .doc-sec h2 { font-size: clamp(22px, 3vw, 28px); font-weight: 800; margin: 0 0 12px; line-height: 1.3; scroll-margin-top: 84px; }
+  .doc-sec p { color: var(--dim); max-width: 48em; margin: 0 0 14px; }
+  .doc-sec p strong { color: var(--text); font-weight: 600; }
+  .doc-sec p code, .doc-sec li code, td code {
+    font: .92em var(--mono); color: var(--trace);
+    background: var(--bg-deep); padding: 1px 6px; border-radius: 5px;
+  }
+  .code-block {
+    background: var(--bg-deep); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; margin: 18px 0 10px;
+  }
+  .code-block pre {
+    margin: 0; padding: 16px 18px; overflow-x: auto;
+    font: 13px/1.65 var(--mono); tab-size: 2; white-space: pre;
+  }
+  .code-label {
+    padding: 8px 16px; font: 11px/1 var(--mono); letter-spacing: .12em;
+    color: var(--dim); border-bottom: 1px solid var(--line);
+  }
+  .play-link { display: inline-block; font-size: 13.5px; font-weight: 600; margin-top: 2px; }
+  .play-link::after { content: " ↗"; }
+  .doc-note { font-size: 13px; color: var(--dim); font-style: normal; margin-top: 2px; }
+
+  /* 语法高亮(与 index.html / Playground 同一套 token 配色) */
+  .tok-comment  { color: #6f6a8a; font-style: italic; }
+  .tok-string   { color: var(--ok); }
+  .tok-interp   { color: var(--trace); }
+  .tok-number   { color: #d19a66; }
+  .tok-keyword  { color: #c586c0; }
+  .tok-reactive { color: var(--trace); font-weight: 600; }
+  .tok-arrow    { color: var(--arrow); font-weight: 700; }
+  .tok-pascal   { color: #e5c07b; }
+
+  /* ── 工具链表格 ─────────────────────────────────── */
+  table.cmds { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 18px; }
+  .cmds th, .cmds td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmds th { color: var(--dim); font: 11px/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; font-weight: 400; }
+  .cmds td:first-child { white-space: nowrap; }
+  .cmds td:first-child code { color: var(--signal); background: var(--bg-deep); }
+  .cmds td:last-child { color: var(--dim); }
+  @media (max-width: 700px) {
+    .cmds td:first-child { white-space: normal; }
+  }
+  .table-scroll { overflow-x: auto; }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 32px 0 44px; margin-top: 30px;
+    color: var(--dim); font-size: 13px;
+  }
+  footer .wrap { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+  footer .spacer { flex: 1; }
+
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="brand" href="./index.html" aria-label="WhenScript 首页">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect width="26" height="26" rx="6" fill="#171426"/>
+        <path d="M4 17 H8 V9 H13 V17 H18 V9 H22" fill="none" stroke="#ffb454" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      WhenScript
+    </a>
+    <div class="links">
+      <a href="./playground.html">Playground</a>
+      <a href="./examples.html">示例</a>
+      <a href="./docs.html" class="active">语法速览</a>
+      <a href="./contact.html">联系</a>
+      <a class="cta" href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code 扩展</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">syntax · 一页速览</div>
+    <h1 class="display">语法速览</h1>
+    <p class="page-sub">八节看完整门语言的骨架。每段代码都通过了 <strong>whenscript check</strong> 静态验证;能单文件跑的节,配了「在 Playground 打开」——当场改、当场看。</p>
+  </div>
+</header>
+
+<div class="wrap docs-layout">
+  <aside class="toc" aria-label="目录">
+    <div class="toc-tag">contents</div>
+    <a href="#types">01 · 基础类型与变量</a>
+    <a href="#reactive">02 · 反应式家族</a>
+    <a href="#events">03 · event 委托</a>
+    <a href="#entity">04 · group 实体与 until</a>
+    <a href="#functions">05 · 函数与 with</a>
+    <a href="#modules">06 · 模块 import / export</a>
+    <a href="#frontend">07 · 前端容器语法</a>
+    <a href="#toolchain">08 · 工具链命令</a>
+  </aside>
+
+  <main>
+
+    <section class="doc-sec js-playable" id="types">
+      <div class="sec-eyebrow">01 · types</div>
+      <h2>基础类型与变量</h2>
+      <p>声明就是「类型 名字 = 值」。<code>number</code> 统一整数与浮点(内部有 int &lt; float &lt; 高精度的精度阶,计算「升-算-降」不打扰你,赋值才是强制点);<code>string</code> 支持 <code>${...}</code> 插值;<code>group</code> 是数组和哈希表的统一体。</p>
+      <p>要精确小数(比如钱),用定点 <code>number&lt;string&gt;</code>,冒号配置位 <code>:2</code> 把结果定标到两位小数。</p>
+      <div class="code-block"><pre><code class="ws">import { print } from "console";
+number n   = 42;      // 整数与浮点同属 number(精度阶 int &lt; float &lt; 高精度)
+number pi  = 3.14;
+string msg = "Hello";
+bool ok    = true;
+group user = ["name": "when", "age": 3];  // group: 数组 + 哈希表的统一体
+
+print(msg, ", ", user["name"], "!");
+print("n * pi = ", n * pi);
+print("ok = ", ok);</code></pre></div>
+      <a class="play-link" data-play href="./playground.html">在 Playground 打开</a>
+    </section>
+
+    <section class="doc-sec js-playable" id="reactive">
+      <div class="sec-eyebrow">02 · reactive</div>
+      <h2>反应式家族:when · changed · once · :=</h2>
+      <p>四个成员各管一件事:<code>when(cond)</code> 在条件<strong>从假变真那一刻</strong>触发一次(边沿,不刷屏);<code>changed(x)</code> 每次变化都报,还给你旧值新值;<code>once</code> 一辈子只响一次;<code>b := expr</code> 让 b <strong>持续等于</strong>右边,像电子表格的单元格。</p>
+      <p>每次写入,引擎先让所有 <code>:=</code> 派生收敛到不动点,再判 when——反应体里读到的永远是一致的世界(glitch-free)。</p>
+      <div class="code-block"><pre><code class="ws">import { print } from "console";
+number count = 0;
+number double := count * 2;   // := 持续绑定: count 一变它就变
+
+when(count == 3) { print("到 3 了(when: 条件变真那一下)"); }
+once(count &gt; 4)  { print("只响一次(once)"); }
+changed(count) with (old, new) {
+  print("count ", old, " -&gt; ", new, ", double = ", double);
+}
+
+count = 3;
+count = 5;
+count = 2;
+count = 6;   // once 已用掉, 不再响</code></pre></div>
+      <a class="play-link" data-play href="./playground.html">在 Playground 打开</a>
+    </section>
+
+    <section class="doc-sec js-playable" id="events">
+      <div class="sec-eyebrow">03 · events</div>
+      <h2>event 委托</h2>
+      <p><code>event&lt;T&gt;</code> 声明一根带类型的信号线:<code>emit</code> 往里发,<code>when(事件) with(带类型的参数)</code> 收。事件是<strong>一等值</strong>——可以当参数传给函数、当返回值带出来、经 <code>import</code> 跨模块共享同一根线。</p>
+      <div class="code-block"><pre><code class="ws">import { print } from "console";
+event&lt;number, string&gt; onLog;
+
+when(onLog) with(number code, string msg) {
+  print("[", code, "] ", msg);
+}
+
+emit onLog(200, "OK");
+emit onLog(404, "Not Found");
+
+// 委托可传递: 把信号线交给函数, 让它来发射
+void worker(event&lt;number, string&gt; report) {
+  emit report(500, "worker 内部出错");
+}
+worker(onLog);</code></pre></div>
+      <a class="play-link" data-play href="./playground.html">在 Playground 打开</a>
+    </section>
+
+    <section class="doc-sec js-playable" id="entity">
+      <div class="sec-eyebrow">04 · entity</div>
+      <h2>group 实体与 until</h2>
+      <p>给 <code>group</code> 的花括号体里写上 when/changed,它就成了<strong>实体</strong>:状态和行为住在一起,不需要 class。<code>delete 名字</code> 一步回收整个实体连同它的全部反应;<code>until(cond)</code> 更进一步——<strong>声明</strong>生命周期,条件一到,实体自动回收,确定性的,没有垃圾回收器猜。</p>
+      <div class="code-block"><pre><code class="ws">import { print } from "console";
+bool closed = false;
+
+group cart = {
+  cart.total = 0;
+  changed(cart.total) { print("[cart] 总价 ", cart.total); }
+  when(cart.total &gt; 100) { print("[cart] 包邮解锁!"); }
+} until(closed);
+
+cart.total = 40;
+cart.total = 120;
+closed = true;     // until 边沿 → 实体连同它的反应一起确定性回收
+cart.total = 999;  // 静默: cart 的 when 已随实体回收</code></pre></div>
+      <a class="play-link" data-play href="./playground.html">在 Playground 打开</a>
+    </section>
+
+    <section class="doc-sec js-playable" id="functions">
+      <div class="sec-eyebrow">05 · functions</div>
+      <h2>函数与 with</h2>
+      <p>函数声明以返回类型开头:<code>number add(number a, number b) { ... }</code>,无返回值用 <code>void</code>。事件处理器的参数有两种写法——<code>with(string m) { ... }</code> 和箭头 <code>(string m) =&gt; { ... }</code>,完全等价(箭头就是 with 的简写);两种写法的参数都要带类型。</p>
+      <div class="code-block"><pre><code class="ws">import { print } from "console";
+number add(number a, number b) { return a + b; }
+print("add(10, 20) = ", add(10, 20));
+
+// 事件参数两种写法完全等价: with 与箭头(参数都带类型)
+event&lt;string&gt; onMsg;
+when(onMsg) with(string m) { print("with 收到: ", m); }
+when(onMsg) (string m) =&gt; { print("箭头收到: ", m); }
+emit onMsg("hi");</code></pre></div>
+      <a class="play-link" data-play href="./playground.html">在 Playground 打开</a>
+    </section>
+
+    <section class="doc-sec" id="modules">
+      <div class="sec-eyebrow">06 · modules</div>
+      <h2>模块 import / export</h2>
+      <p>文件末尾 <code>export { 名字们 };</code> 列出要暴露的函数、变量、事件;另一个文件 <code>import { ... } from "./路径.when";</code> 拿来用。经 import 共享的同一个 event 跨模块<strong>完全互通</strong>——这是设计好的共享机制,不是巧合。</p>
+      <div class="code-block">
+        <div class="code-label">lib/math.when</div>
+        <pre><code class="ws">number square(number n) { return n * n; }
+number PI = 3.14159;
+export { square, PI };</code></pre>
+      </div>
+      <div class="code-block">
+        <div class="code-label">main.when</div>
+        <pre><code class="ws">import { print } from "console";
+import { square, PI } from "./lib/math.when";
+
+print("square(5) = ", square(5));
+print("PI = ", PI);</code></pre>
+      </div>
+      <p class="doc-note">多文件示例需要本地 CLI(Playground 是单文件的):把两个文件放好后 <code>whenscript main.when</code>。</p>
+    </section>
+
+    <section class="doc-sec js-playable" id="frontend">
+      <div class="sec-eyebrow">07 · frontend</div>
+      <h2>前端容器语法</h2>
+      <p>一切皆容器:<code>container 名字() { ... }</code> 声明组件,统一块 <code>{ 配置: 值; 子元素 }</code> 既写样式也放孩子。给按钮起个名,<code>when(按钮)</code> 直接就是点击反应;文本里的 <code>${...}</code> 插值自动跟着数据变——布局就是 <code>:=</code> 电路,没有虚拟 DOM。</p>
+      <div class="code-block"><pre><code class="ws">import { Text, Button } from "dom";
+
+number count  = 0;
+number double := count * 2;   // 布局即电路: 值变, 界面自己动
+
+container App() {
+  padding: "24px"; fontFamily: "system-ui, sans-serif";
+  Text("count = ${count} · double = ${double}") { fontSize: "20px"; weight: bold }
+  add = Button("+1") { padding: "8px 16px"; cursor: "pointer" }
+  when(add) { count = count + 1; }
+}
+App();</code></pre></div>
+      <a class="play-link" data-play href="./playground.html">在 Playground 打开</a>
+    </section>
+
+    <section class="doc-sec" id="toolchain">
+      <div class="sec-eyebrow">08 · toolchain</div>
+      <h2>工具链命令</h2>
+      <p>一个 <code>whenscript</code> 二进制,全套工具面。工具面能比执行面报得更多、看得更多,但绝不改执行语义。</p>
+      <div class="table-scroll">
+        <table class="cmds">
+          <thead><tr><th>命令</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><code>whenscript &lt;file.when&gt;</code></td><td>运行程序;语法/语义错在执行前响亮报错,不静默吞。</td></tr>
+            <tr><td><code>whenscript check [--json] &lt;file&gt;</code></td><td>静态检查(lex → parse → 语义),一次报出全部语义错误,带行列号,不执行。</td></tr>
+            <tr><td><code>whenscript fmt [--write|--check] &lt;file&gt;</code></td><td>保真格式化:token 流保真、注释一个不丢、幂等;<code>--check</code> 供 CI 用。</td></tr>
+            <tr><td><code>whenscript pkg &lt;install|add|remove|list&gt;</code></td><td>去中心化包管理:when.json + when.lock + when_modules/,支持 git 与本地路径依赖,无安装脚本。</td></tr>
+            <tr><td><code>whenscript graph &lt;file&gt; [-o out.html]</code></td><td>导出运行时反应式依赖图的只读快照(交互 HTML,也可 <code>--dot</code>/<code>--json</code>)。</td></tr>
+            <tr><td><code>whenscript repl</code></td><td>交互式会话,回放式地试语言。</td></tr>
+            <tr><td><code>whenscript lsp</code></td><td>在 stdio 上说 LSP,供编辑器接入:诊断、悬停中文文档、补全。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 WhenScript · 写入,即触发</span>
+    <span class="spacer"></span>
+    <a href="./contact.html">联系我们</a>
+    <a href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code Marketplace</a>
+  </div>
+</footer>
+
+<script>
+  // ── 语法高亮(与 index.html 同一套正则/配色)───────────────────────────────
+  const REACTIVE_WORDS = "when|changed|assigned|once|until|guard|with|emit|event";
+  const KEYWORD_WORDS =
+    "number|string|bool|group|byte|bit|function|return|void|import|export|from|" +
+    "break|each|if|else|while|for|var|switch|case|default|true|false|unknown|" +
+    "before|after|delete|drop|copy|self|turn|container";
+  const TOKEN_RE = new RegExp([
+    "(?<comment>/\\*[\\s\\S]*?\\*/|//[^\\n]*)",
+    '(?<string>"(?:\\\\.|[^"\\\\])*")',
+    "(?<number>\\b(?:0[xX][0-9a-fA-F]+|\\d+\\.\\d+|\\d+)\\b)",
+    "(?<arrow>:=)",
+    "(?<reactive>\\b(?:" + REACTIVE_WORDS + ")\\b)",
+    "(?<keyword>\\b(?:" + KEYWORD_WORDS + ")\\b)",
+    "(?<pascal>\\b[A-Z][A-Za-z0-9_]*\\b)",
+  ].join("|"), "g");
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function hlString(raw) {
+    const re = /\$\{[^}]*\}/g; let out = "", last = 0, m;
+    while ((m = re.exec(raw))) {
+      if (m.index > last) out += '<span class="tok-string">' + esc(raw.slice(last, m.index)) + '</span>';
+      out += '<span class="tok-interp">' + esc(m[0]) + '</span>';
+      last = m.index + m[0].length;
+    }
+    if (last < raw.length) out += '<span class="tok-string">' + esc(raw.slice(last)) + '</span>';
+    return out;
+  }
+  function highlight(src) {
+    let out = "", last = 0, m; TOKEN_RE.lastIndex = 0;
+    while ((m = TOKEN_RE.exec(src))) {
+      if (m.index > last) out += esc(src.slice(last, m.index));
+      const g = m.groups;
+      if (g.comment !== undefined) out += '<span class="tok-comment">' + esc(g.comment) + '</span>';
+      else if (g.string !== undefined) out += hlString(g.string);
+      else if (g.number !== undefined) out += '<span class="tok-number">' + esc(g.number) + '</span>';
+      else if (g.arrow !== undefined) out += '<span class="tok-arrow">:=</span>';
+      else if (g.reactive !== undefined) out += '<span class="tok-reactive">' + esc(g.reactive) + '</span>';
+      else if (g.keyword !== undefined) out += '<span class="tok-keyword">' + esc(g.keyword) + '</span>';
+      else if (g.pascal !== undefined) out += '<span class="tok-pascal">' + esc(g.pascal) + '</span>';
+      last = m.index + m[0].length;
+      if (m[0].length === 0) TOKEN_RE.lastIndex++;
+    }
+    return out + esc(src.slice(last));
+  }
+
+  // ── base64url 编码(与 Playground 的 ?src= 解码严格互逆)──────────────────────
+  function toSrcParam(code) {
+    return btoa(unescape(encodeURIComponent(code))).replace(/\+/g, "-").replace(/\//g, "_");
+  }
+
+  // 高亮全部代码块;可单文件跑的节,用「页面上就是这段」的代码生成 Playground 链接
+  document.querySelectorAll("code.ws").forEach(codeEl => {
+    codeEl.innerHTML = highlight(codeEl.textContent);
+  });
+  document.querySelectorAll(".js-playable").forEach(box => {
+    const codeEl = box.querySelector("code.ws");
+    const btn = box.querySelector("[data-play]");
+    if (!codeEl || !btn) return;
+    btn.href = "./playground.html?src=" + encodeURIComponent(toSrcParam(codeEl.textContent));
+  });
+</script>
+</body>
+</html>

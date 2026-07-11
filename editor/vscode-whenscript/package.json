@@ -1,0 +1,95 @@
+{
+  "name": "whenscript",
+  "displayName": "WhenScript",
+  "description": "WhenScript 语言支持:反应式 when 语言,写入即触发、心智负担小,为人类和 AI 而生——语法高亮、代码片段、LSP 诊断/悬停/补全一应俱全。",
+  "version": "0.2.3",
+  "publisher": "whenscript-lang",
+  "license": "SEE LICENSE IN LICENSE",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Formatters",
+    "Linters"
+  ],
+  "keywords": [
+    "whenscript",
+    "when",
+    "reactive",
+    "reactive-programming",
+    "event-driven",
+    "事件驱动",
+    "反应式",
+    "语言支持",
+    "language-server",
+    "lsp",
+    ".when"
+  ],
+  "galleryBanner": {
+    "color": "#1e1b2e",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onLanguage:whenscript"
+  ],
+  "main": "./src/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "restrictedConfigurations": [
+        "whenscript.lspPath"
+      ]
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "whenscript",
+        "aliases": [
+          "WhenScript",
+          "whenscript"
+        ],
+        "extensions": [
+          ".when"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "whenscript-icons",
+        "label": "WhenScript Icons",
+        "path": "./icons/whenscript-icon-theme.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "whenscript",
+        "scopeName": "source.whenscript",
+        "path": "./syntaxes/whenscript.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "whenscript",
+        "path": "./snippets/whenscript.json"
+      }
+    ],
+    "configuration": {
+      "title": "WhenScript",
+      "properties": {
+        "whenscript.lspPath": {
+          "type": "string",
+          "default": "whenscript",
+          "description": "whenscript 可执行文件的路径。扩展会用 `<lspPath> lsp` 启动语言服务器(提供诊断等能力);留空或找不到二进制时,扩展仍会正常提供语法高亮,只是没有诊断。构建方法见 README。"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}

@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>示例 · WhenScript</title>
+<meta name="description" content="WhenScript 示例画廊:模拟控制台里的语言核心示例(输出全部来自引擎真实运行),以及 Playground 里能直接跑的页面与小游戏。">
+<link rel="icon" type="image/png" href="./icon.png">
+<style>
+  :root {
+    --bg: #1e1b2e;
+    --bg-deep: #171426;
+    --panel: #26213c;
+    --line: #3b3358;
+    --text: #ece8f8;
+    --dim: #a89fc8;
+    --signal: #ffb454;
+    --trace: #6fd9e7;
+    --arrow: #ff5fa2;
+    --ok: #89ca78;
+    --term: #14111f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+  }
+  a { color: var(--trace); text-decoration: none; }
+  a:hover { color: var(--signal); }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 2px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── 导航(与 index.html 同一套)───────────────── */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(30, 27, 46, .88); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 22px; height: 58px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); }
+  .brand svg { display: block; }
+  nav .links { display: flex; gap: 18px; margin-left: auto; font-size: 14px; flex-wrap: wrap; }
+  nav .links a { color: var(--dim); padding: 4px 2px; border-bottom: 2px solid transparent; }
+  nav .links a:hover { color: var(--text); border-bottom-color: var(--signal); }
+  nav .links a.active { color: var(--text); border-bottom-color: var(--signal); }
+  nav .links a.cta { color: var(--signal); font-weight: 600; }
+
+  /* ── 页头 ─────────────────────────────────────── */
+  header.page-head { padding: 56px 0 8px; }
+  .eyebrow {
+    font: 12px/1 var(--mono); letter-spacing: .18em; text-transform: lowercase;
+    color: var(--signal); margin-bottom: 16px;
+  }
+  h1.display { font-size: clamp(34px, 5vw, 52px); font-weight: 900; line-height: 1.2; margin: 0 0 12px; }
+  .page-sub { color: var(--dim); max-width: 44em; margin: 0 0 8px; }
+  .page-sub strong { color: var(--text); font-weight: 600; }
+
+  section { padding: 48px 0 56px; }
+  .sec-eyebrow { font: 12px/1 var(--mono); letter-spacing: .18em; color: var(--signal); margin-bottom: 10px; }
+  h2 { font-size: clamp(24px, 3.2vw, 32px); font-weight: 800; margin: 0 0 12px; line-height: 1.3; }
+  .sec-sub { color: var(--dim); max-width: 46em; margin-bottom: 32px; }
+  .sec-sub code, .term-blurb code, .show-card p code {
+    font: .92em var(--mono); color: var(--trace);
+    background: var(--bg-deep); padding: 1px 6px; border-radius: 5px;
+  }
+
+  /* ── 模拟控制台卡片 ─────────────────────────────── */
+  .term-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  @media (max-width: 900px) { .term-grid { grid-template-columns: 1fr; } }
+  .term-item h3 { margin: 0 0 4px; font-size: 17px; }
+  .term-blurb { margin: 0 0 12px; font-size: 13.5px; color: var(--dim); }
+  .term-card {
+    background: var(--term); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 14px 36px rgba(0,0,0,.28);
+    display: flex; flex-direction: column;
+  }
+  .term-head {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--bg-deep);
+  }
+  .tdot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+  .tdot.r { background: #ff5f57; } .tdot.y { background: #febc2e; } .tdot.g { background: #28c840; }
+  .term-name { font: 11px/1 var(--mono); letter-spacing: .08em; color: var(--dim); margin-left: 6px; }
+  .term-run {
+    margin-left: auto; font: 11px/1 var(--mono); font-weight: 700;
+    color: var(--signal); border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 9px; white-space: nowrap;
+  }
+  .term-run:hover { border-color: var(--signal); color: var(--signal); }
+  .term-code {
+    margin: 0; padding: 14px 16px; overflow-x: auto; flex: 1 1 auto;
+    font: 12.5px/1.65 var(--mono); tab-size: 2; white-space: pre;
+  }
+  .term-out { border-top: 1px solid var(--line); background: #0f0d1a; padding: 8px 16px 12px; }
+  .out-tag { font: 10px/1 var(--mono); letter-spacing: .14em; color: #5c5480; text-transform: uppercase; margin: 4px 0 8px; }
+  .out-line { font: 12.5px/1.7 var(--mono); color: var(--ok); white-space: pre-wrap; word-break: break-word; }
+  .out-line::before { content: "\203A\00a0"; color: #5c5480; }
+
+  /* 语法高亮(与 index.html / Playground 同一套 token 配色) */
+  .tok-comment  { color: #6f6a8a; font-style: italic; }
+  .tok-string   { color: var(--ok); }
+  .tok-interp   { color: var(--trace); }
+  .tok-number   { color: #d19a66; }
+  .tok-keyword  { color: #c586c0; }
+  .tok-reactive { color: var(--trace); font-weight: 600; }
+  .tok-arrow    { color: var(--arrow); font-weight: 700; }
+  .tok-pascal   { color: #e5c07b; }
+
+  /* ── 方波分隔线 ────────────────────────────────── */
+  .wave-divider { height: 24px; overflow: hidden; opacity: .55; }
+  .wave-divider svg { display: block; width: 100%; height: 24px; }
+  .wave-divider rect { animation: waveflow 2.4s linear infinite; }
+  @keyframes waveflow { from { transform: translateX(0); } to { transform: translateX(-48px); } }
+
+  /* ── 复杂示例卡片 ─────────────────────────────── */
+  .show-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .show-grid { grid-template-columns: 1fr; } }
+  .show-card {
+    display: flex; flex-direction: column; gap: 8px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 22px; color: var(--text);
+    transition: transform .12s ease, border-color .12s ease;
+  }
+  .show-card:hover { transform: translateY(-2px); border-color: var(--signal); color: var(--text); }
+  .show-file {
+    font: 11px/1 var(--mono); letter-spacing: .1em; color: var(--signal);
+    border: 1px solid var(--line); border-radius: 999px; align-self: flex-start;
+    padding: 5px 10px; background: var(--bg-deep);
+  }
+  .show-card h3 { margin: 6px 0 0; font-size: 18px; }
+  .show-card p { margin: 0; font-size: 13.5px; color: var(--dim); flex: 1 1 auto; }
+  .show-go { font-size: 13px; font-weight: 600; color: var(--trace); margin-top: 6px; }
+  .show-card:hover .show-go { color: var(--signal); }
+  .show-lead { grid-column: 1 / -1; padding: 30px 28px; position: relative; overflow: hidden; }
+  .show-lead h3 { font-size: 24px; }
+  .show-lead p { max-width: 46em; }
+  .show-lead .lead-wave { position: absolute; right: 24px; top: 26px; opacity: .5; }
+  @media (max-width: 700px) { .show-lead .lead-wave { display: none; } }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 32px 0 44px; margin-top: 30px;
+    color: var(--dim); font-size: 13px;
+  }
+  footer .wrap { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+  footer .spacer { flex: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wave-divider rect { animation: none; }
+    .show-card { transition: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="./index.html" aria-label="WhenScript 首页">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect width="26" height="26" rx="6" fill="#171426"/>
+        <path d="M4 17 H8 V9 H13 V17 H18 V9 H22" fill="none" stroke="#ffb454" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      WhenScript
+    </a>
+    <div class="links">
+      <a href="./playground.html">Playground</a>
+      <a href="./examples.html" class="active">示例</a>
+      <a href="./docs.html">语法速览</a>
+      <a href="./contact.html">联系</a>
+      <a class="cta" href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code 扩展</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">examples · 眼见为实</div>
+    <h1 class="display">示例画廊</h1>
+    <p class="page-sub">这一页没有演示文案:每段代码都通过了 <strong>whenscript check</strong> 静态验证,控制台里的每行输出都是引擎<strong>真实跑出来</strong>的。不信?点「在 Playground 跑」,当场复现。</p>
+  </div>
+</header>
+
+<section id="simple">
+  <div class="wrap">
+    <div class="sec-eyebrow">console · 纯语言</div>
+    <h2>简单示例:一屏一个概念</h2>
+    <p class="sec-sub">语言核心不需要浏览器——下面是八个最小可跑片段,覆盖类型、派生 <code>:=</code>、反应式家族、事件委托和定点小数。</p>
+    <div class="term-grid">
+
+      <article class="term-item js-playable">
+        <h3>变量与类型</h3>
+        <p class="term-blurb">强类型直给:<code>number</code> / <code>string</code> / <code>bool</code>,运算即所见。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">01-types.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+number a = 10;
+number b = 3;
+string lang = "WhenScript";
+bool strict = true;
+
+print(lang, " 是强类型的: ", strict);
+print("a + b = ", a + b);
+print("a / b = ", a / b);
+print("a &gt; b: ", a &gt; b);</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">WhenScript 是强类型的: true</div><div class="out-line">a + b = 13</div><div class="out-line">a / b = 3.3333333333333335</div><div class="out-line">a &gt; b: true</div></div>
+        </div>
+      </article>
+
+      <article class="term-item js-playable">
+        <h3>派生绑定 :=</h3>
+        <p class="term-blurb"><code>total</code> 持续等于 <code>price + shipping</code>:只改输入,派生值自己变。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">02-derive.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+number price = 100;
+number shipping = 8;
+number total := price + shipping;  // total 持续等于右边
+
+print("total = ", total);
+price = 200;                       // 只写 price,total 自己变
+print("total = ", total);
+shipping = 20;
+print("total = ", total);</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">total = 108</div><div class="out-line">total = 208</div><div class="out-line">total = 220</div></div>
+        </div>
+      </article>
+
+      <article class="term-item js-playable">
+        <h3>when · 边沿触发</h3>
+        <p class="term-blurb">条件从假变真的那一刻触发一次;持续为真不重复刷屏。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">03-when-edge.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+number count = 0;
+
+when(count == 3) { print("count 到 3 了!"); }
+when(count &gt; 4)  { print("超过 4: ", count); }
+
+count = 1;
+count = 3;   // 触发第一条
+count = 5;   // 触发第二条
+count = 6;   // 持续为真,不重复触发(边沿语义)</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">count 到 3 了!</div><div class="out-line">超过 4: 5</div></div>
+        </div>
+      </article>
+
+      <article class="term-item js-playable">
+        <h3>changed · 每变必报</h3>
+        <p class="term-blurb"><code>changed</code> 记流水账,<code>when</code> 只在越线那一下告警——各司其职。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">04-changed.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+number temp = 20;
+
+changed(temp) with (old, new) {
+  print("温度 ", old, " -&gt; ", new);
+}
+when(temp &gt;= 26) {
+  print("&gt;&gt; 达到 26 度,告警一次");
+}
+
+temp = 23;
+temp = 26;
+temp = 28;   // changed 照报,when 不再响</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">温度 20 -&gt; 23</div><div class="out-line">温度 23 -&gt; 26</div><div class="out-line">&gt;&gt; 达到 26 度,告警一次</div><div class="out-line">温度 26 -&gt; 28</div></div>
+        </div>
+      </article>
+
+      <article class="term-item js-playable">
+        <h3>event 委托</h3>
+        <p class="term-blurb"><code>event&lt;T&gt;</code> 是一等值:<code>emit</code> 触发、<code>with</code> 收参,信号线还能交给函数。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">05-event.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+event&lt;number, string&gt; onLog;
+
+when(onLog) with(number code, string msg) {
+  print("[", code, "] ", msg);
+}
+
+emit onLog(200, "OK");
+emit onLog(404, "Not Found");
+
+// 委托可传递: 把信号线交给函数, 让它来发射
+void worker(event&lt;number, string&gt; report) {
+  emit report(500, "worker 内部出错");
+}
+worker(onLog);</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">[200] OK</div><div class="out-line">[404] Not Found</div><div class="out-line">[500] worker 内部出错</div></div>
+        </div>
+      </article>
+
+      <article class="term-item js-playable">
+        <h3>group 数据结构</h3>
+        <p class="term-blurb">数组和哈希表的统一体:数字键走数组,字符串键走哈希。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">06-group.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+group arr = [1, 2, 3];
+print("arr[0] = ", arr[0]);
+arr[0] = 100;
+print("改后 arr[0] = ", arr[0]);
+
+// 字符串键自动走哈希表, 数字键走数组
+group user = ["name": "when", "age": 3];
+print("user 的 name = ", user["name"]);
+print("user 的 age  = ", user["age"]);</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">arr[0] = 1</div><div class="out-line">改后 arr[0] = 100</div><div class="out-line">user 的 name = when</div><div class="out-line">user 的 age  = 3</div></div>
+        </div>
+      </article>
+
+      <article class="term-item js-playable">
+        <h3>字符串插值</h3>
+        <p class="term-blurb"><code>"${a} * ${b} = ${a * b}"</code>——表达式直接进字符串。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">07-interp.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+string name = "WhenScript";
+number a = 6;
+number b = 7;
+print("你好,${name}!");
+print("${a} * ${b} = ${a * b}");</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">你好,WhenScript!</div><div class="out-line">6 * 7 = 42</div></div>
+        </div>
+      </article>
+
+      <article class="term-item js-playable">
+        <h3>定点小数 number&lt;string&gt;</h3>
+        <p class="term-blurb">浮点的 0.1 + 0.2 会漂移;<code>number&lt;string&gt;</code> 精确定点,<code>:2</code> 定标两位小数。</p>
+        <div class="term-card">
+          <div class="term-head">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="term-name">08-money.when</span>
+            <a class="term-run" data-play href="./playground.html">▶ 在 Playground 跑</a>
+          </div>
+          <pre class="term-code"><code class="ws">import { print } from "console";
+// 浮点的 0.1 + 0.2 有名地不等于 0.3
+// number&lt;string&gt; 是精确定点; :2 = 结果保留两位小数
+number&lt;string&gt; a = "0.10";
+number&lt;string&gt; b = "0.20";
+number&lt;string&gt;:2 sum := a + b;   // 派生和, 两位小数
+
+print("浮点: 0.1 + 0.2 = ", 0.1 + 0.2);
+print("定点: a + b     = ", sum);
+a = "99.90";
+print("a 一变, sum 跟着变: ", sum);</code></pre>
+          <div class="term-out"><div class="out-tag">output · 真实运行结果</div><div class="out-line">浮点: 0.1 + 0.2 = 0.30000000000000004</div><div class="out-line">定点: a + b     = 0.30</div><div class="out-line">a 一变, sum 跟着变: 100.10</div></div>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<div class="wave-divider" aria-hidden="true">
+  <svg><defs><pattern id="sq" width="48" height="24" patternUnits="userSpaceOnUse">
+    <path d="M0 18 H12 V6 H24 V18 H36 V6 H48" fill="none" stroke="#ffb454" stroke-width="1.5"/>
+  </pattern></defs><rect x="0" y="0" width="200%" height="24" fill="url(#sq)"/></svg>
+</div>
+
+<section id="complex" style="background: var(--bg-deep);">
+  <div class="wrap">
+    <div class="sec-eyebrow">playground · 页面与游戏</div>
+    <h2>复杂示例:酷炫页面 + 小游戏</h2>
+    <p class="sec-sub">每张卡都在 Playground 里直接打开——wasm 引擎当场跑,代码就在左边,随便改。</p>
+    <div class="show-grid">
+
+      <a class="show-card show-lead" href="./playground.html?example=game.when">
+        <svg class="lead-wave" width="180" height="28" viewBox="0 0 180 28" aria-hidden="true">
+          <path d="M0 21 H15 V7 H30 V21 H45 V7 H60 V21 H75 V7 H90 V21 H105 V7 H120 V21 H135 V7 H150 V21 H165 V7 H180" fill="none" stroke="#ffb454" stroke-width="2"/>
+        </svg>
+        <span class="show-file">game.when</span>
+        <h3>Flappy 金苹果</h3>
+        <p>一个完整的游戏:没有游戏引擎、没有主循环对象、没有一个监听器的注册/解绑。碰撞检测、计分、柱子回收,全是扁平的 <code>when</code> 条件;跳跃和物理冻结是代数,不是分支。点击画面拍打翅膀……呃,拍打苹果。</p>
+        <span class="show-go">在 Playground 打开 →</span>
+      </a>
+
+      <a class="show-card" href="./playground.html?example=neon.when">
+        <span class="show-file">neon.when</span>
+        <h3>光扫边框</h3>
+        <p>图层模型实战:<code>Stack</code> 图层组 + <code>mask</code> 遮罩 + <code>spin</code> 动效。conic 渐变光层被裁成 2px 边框环,转动的是渐变角而不是盒子;另附文字光扫。</p>
+        <span class="show-go">在 Playground 打开 →</span>
+      </a>
+
+      <a class="show-card" href="./playground.html?example=motion.when">
+        <span class="show-file">motion.when</span>
+        <h3>动画编排</h3>
+        <p>Web Animations API 原语 <code>animate</code>:关键帧和时序都是普通 group,序列化后交给浏览器原生动画引擎——delay 错峰入场,弹簧式缓动回弹。</p>
+        <span class="show-go">在 Playground 打开 →</span>
+      </a>
+
+      <a class="show-card" href="./playground.html?example=events.when">
+        <span class="show-file">events.when</span>
+        <h3>富事件跟随</h3>
+        <p>类型即契约:声明 <code>event&lt;group&gt;</code>,DOM 事件的坐标/键码/修饰键就装成 group 喂进来。聚光灯跟鼠标、hover 是反应式状态、键盘面板实时显示按键。</p>
+        <span class="show-go">在 Playground 打开 →</span>
+      </a>
+
+      <a class="show-card" href="./playground.html?example=styled.when">
+        <span class="show-file">styled.when</span>
+        <h3>反应式购物车</h3>
+        <p>渐变卡片里点 +/−:命令式只写 <code>qty ± 1</code> 这一件事,总价、颜色、满减徽章全是 <code>:=</code> 派生加 <code>changed</code> 反应,自己跟着变。</p>
+        <span class="show-go">在 Playground 打开 →</span>
+      </a>
+
+      <a class="show-card" href="./playground.html?example=switch.when">
+        <span class="show-file">switch.when</span>
+        <h3>路由切换</h3>
+        <p>容器体 <code>switch</code> = 反应式选择器:<code>url</code> 一变,视图自动切到匹配的 case——没有路由库,也不需要。</p>
+        <span class="show-go">在 Playground 打开 →</span>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 WhenScript · 写入,即触发</span>
+    <span class="spacer"></span>
+    <a href="./contact.html">联系我们</a>
+    <a href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code Marketplace</a>
+  </div>
+</footer>
+
+<script>
+  // ── 语法高亮(与 index.html 同一套正则/配色)───────────────────────────────
+  const REACTIVE_WORDS = "when|changed|assigned|once|until|guard|with|emit|event";
+  const KEYWORD_WORDS =
+    "number|string|bool|group|byte|bit|function|return|void|import|export|from|" +
+    "break|each|if|else|while|for|var|switch|case|default|true|false|unknown|" +
+    "before|after|delete|drop|copy|self|turn|container";
+  const TOKEN_RE = new RegExp([
+    "(?<comment>/\\*[\\s\\S]*?\\*/|//[^\\n]*)",
+    '(?<string>"(?:\\\\.|[^"\\\\])*")',
+    "(?<number>\\b(?:0[xX][0-9a-fA-F]+|\\d+\\.\\d+|\\d+)\\b)",
+    "(?<arrow>:=)",
+    "(?<reactive>\\b(?:" + REACTIVE_WORDS + ")\\b)",
+    "(?<keyword>\\b(?:" + KEYWORD_WORDS + ")\\b)",
+    "(?<pascal>\\b[A-Z][A-Za-z0-9_]*\\b)",
+  ].join("|"), "g");
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function hlString(raw) {
+    const re = /\$\{[^}]*\}/g; let out = "", last = 0, m;
+    while ((m = re.exec(raw))) {
+      if (m.index > last) out += '<span class="tok-string">' + esc(raw.slice(last, m.index)) + '</span>';
+      out += '<span class="tok-interp">' + esc(m[0]) + '</span>';
+      last = m.index + m[0].length;
+    }
+    if (last < raw.length) out += '<span class="tok-string">' + esc(raw.slice(last)) + '</span>';
+    return out;
+  }
+  function highlight(src) {
+    let out = "", last = 0, m; TOKEN_RE.lastIndex = 0;
+    while ((m = TOKEN_RE.exec(src))) {
+      if (m.index > last) out += esc(src.slice(last, m.index));
+      const g = m.groups;
+      if (g.comment !== undefined) out += '<span class="tok-comment">' + esc(g.comment) + '</span>';
+      else if (g.string !== undefined) out += hlString(g.string);
+      else if (g.number !== undefined) out += '<span class="tok-number">' + esc(g.number) + '</span>';
+      else if (g.arrow !== undefined) out += '<span class="tok-arrow">:=</span>';
+      else if (g.reactive !== undefined) out += '<span class="tok-reactive">' + esc(g.reactive) + '</span>';
+      else if (g.keyword !== undefined) out += '<span class="tok-keyword">' + esc(g.keyword) + '</span>';
+      else if (g.pascal !== undefined) out += '<span class="tok-pascal">' + esc(g.pascal) + '</span>';
+      last = m.index + m[0].length;
+      if (m[0].length === 0) TOKEN_RE.lastIndex++;
+    }
+    return out + esc(src.slice(last));
+  }
+
+  // ── base64url 编码(与 Playground 的 ?src= 解码严格互逆)──────────────────────
+  function toSrcParam(code) {
+    return btoa(unescape(encodeURIComponent(code))).replace(/\+/g, "-").replace(/\//g, "_");
+  }
+
+  // 每张卡:高亮代码 + 用「页面上就是这段」的代码生成 Playground 链接
+  document.querySelectorAll(".js-playable").forEach(box => {
+    const codeEl = box.querySelector("code.ws");
+    if (!codeEl) return;
+    const raw = codeEl.textContent;
+    codeEl.innerHTML = highlight(raw);
+    const btn = box.querySelector("[data-play]");
+    if (btn) btn.href = "./playground.html?src=" + encodeURIComponent(toSrcParam(raw));
+  });
+</script>
+</body>
+</html>

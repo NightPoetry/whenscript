@@ -1,0 +1,110 @@
+// 富事件载荷 demo —— 值桥从「只传 .value 字符串」升级成「传结构化 group」后能写出什么。
+// 类型即契约:声明 event<group> → host 就把 DOM 事件的坐标/键码/修饰键序列化成 group 喂进来,
+// `when(ev) with(group e){ e.clientX … }` 收。声明 event<string> 仍只拿 .value(不变)。
+// 三个面板:① 聚光灯跟鼠标(坐标)② hover = 反应式状态(不是伪类)③ 键盘按键 + 修饰键。
+import { create, setText, setAttr, setStyle, append, query, on } from "dom";
+
+number app = create("div");
+setStyle(app, "maxWidth", "640px");
+setStyle(app, "margin", "24px auto");
+setStyle(app, "font", "15px system-ui, sans-serif");
+setStyle(app, "display", "flex");
+setStyle(app, "flexDirection", "column");
+setStyle(app, "gap", "18px");
+
+number title = create("h2");
+setText(title, "富事件载荷 · 一切皆事件");
+setStyle(title, "margin", "0");
+append(app, title);
+
+// ── 面板 ① 聚光灯跟鼠标(clientX/clientY / offsetX/offsetY 过桥)──────────────────────
+number stage = create("div");
+setAttr(stage, "id", "stage");
+setStyle(stage, "position", "relative");
+setStyle(stage, "height", "220px");
+setStyle(stage, "background", "#0f172a");
+setStyle(stage, "borderRadius", "14px");
+setStyle(stage, "overflow", "hidden");
+setStyle(stage, "cursor", "crosshair");
+append(app, stage);
+
+number spot = create("div");
+setStyle(spot, "position", "absolute");
+setStyle(spot, "width", "160px");
+setStyle(spot, "height", "160px");
+setStyle(spot, "borderRadius", "50%");
+setStyle(spot, "background", "radial-gradient(circle, rgba(250,204,21,.85), rgba(250,204,21,0) 70%)");
+setStyle(spot, "pointerEvents", "none");
+setStyle(spot, "transform", "translate(-50%,-50%)");
+setStyle(spot, "left", "-999px");
+append(stage, spot);
+
+number readout = create("div");
+setAttr(readout, "id", "readout");
+setStyle(readout, "position", "absolute");
+setStyle(readout, "left", "14px");
+setStyle(readout, "top", "12px");
+setStyle(readout, "color", "#e2e8f0");
+setStyle(readout, "font", "13px ui-monospace, monospace");
+setText(readout, "在深色框里移动鼠标 →");
+append(stage, readout);
+
+event<group> mv;
+on(stage, "mousemove", mv);
+when(mv) with(group e) {                         // e = 结构化事件 group(host 序列化过来的)
+  setStyle(spot, "left", e.offsetX + "px");      // 坐标真的过桥了 → 聚光灯跟随(ws-base 默认过渡补平滑)
+  setStyle(spot, "top", e.offsetY + "px");
+  setText(readout, "offset=(" + e.offsetX + "," + e.offsetY + ")  client=(" + e.clientX + "," + e.clientY + ")");
+}
+
+// ── 面板 ② hover = 反应式状态(mouseenter/leave 驱动一个信号,不是 CSS 伪类)──────────
+number card = create("div");
+setAttr(card, "id", "card");
+setStyle(card, "padding", "22px");
+setStyle(card, "borderRadius", "12px");
+setStyle(card, "color", "white");
+setStyle(card, "fontWeight", "600");
+setStyle(card, "cursor", "pointer");
+setText(card, "把鼠标移到我身上(hover = 反应式状态)");
+append(app, card);
+
+event<group> enter;
+event<group> leave;
+on(card, "mouseenter", enter);
+on(card, "mouseleave", leave);
+number hovered = 0;
+when(enter) { hovered = 1 }
+when(leave) { hovered = 0 }
+string cardBg := if (hovered) { "#22c55e" } else { "#334155" };   // hover 高亮 = if 作为值的反应式电路
+changed(cardBg) { setStyle(card, "background", cardBg); }
+setStyle(card, "background", cardBg);                             // 初始
+
+// ── 面板 ③ 键盘按键 + 修饰键(key/code/ctrlKey 过桥)────────────────────────────────
+number keyBox = create("div");
+setStyle(keyBox, "padding", "18px");
+setStyle(keyBox, "borderRadius", "12px");
+setStyle(keyBox, "background", "#f1f5f9");
+setStyle(keyBox, "border", "1px solid #cbd5e1");
+append(app, keyBox);
+
+number keyRead = create("div");
+setAttr(keyRead, "id", "keyRead");
+setStyle(keyRead, "font", "14px ui-monospace, monospace");
+setText(keyRead, "按任意键(试试 Ctrl / Enter)…");
+append(keyBox, keyRead);
+
+number keyStatus = create("div");
+setAttr(keyStatus, "id", "keyStatus");
+setStyle(keyStatus, "marginTop", "8px");
+setStyle(keyStatus, "fontWeight", "700");
+setStyle(keyStatus, "color", "#0f766e");
+append(keyBox, keyStatus);
+
+number body = query("body");
+event<group> keys;
+on(body, "keydown", keys);                       // 挂 body:键盘事件冒泡上来,页面任意处按键都收得到
+when(keys) with(group k) {
+  setText(keyRead, "key=" + k.key + "   code=" + k.code + "   ctrl=" + k.ctrlKey + " shift=" + k.shiftKey);
+  string tag := if (k.key == "Enter") { "⏎ 你按了 Enter!" } else { "" };
+  setText(keyStatus, tag);
+}

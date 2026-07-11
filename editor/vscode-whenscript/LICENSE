@@ -1,0 +1,90 @@
+MIT License Plus (Attribution Required)
+
+Copyright (c) 2026 NightPoetry and WhenScript contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+1. Notice. The above copyright notice and this permission notice (including
+   the Attribution Requirement below) shall be included in all copies or
+   substantial portions of the Software.
+
+2. Attribution Requirement. Any Distribution (as defined below) of the
+   Software, or of a Derivative Work, must include a clear and reasonably
+   visible public credit that is reasonably discoverable by an end user or
+   recipient of the Distribution — for example in a README, an "About" or
+   "Credits" screen, a documentation site, a startup/splash notice, or a
+   comparable customary location for the medium. The credit must include, at
+   minimum:
+
+   (a) the name "NightPoetry"; and
+   (b) the name "WhenScript", together with a link to its official project
+       page or repository, if one is publicly available at the time of the
+       Distribution.
+
+   The exact wording, placement, and styling of the credit may be reasonably
+   adapted to the medium (e.g., a GUI "About" screen versus a CLI tool's
+   `--version`/`--about` output versus a package registry listing), provided
+   the substance of (a) and (b) is preserved and remains reasonably
+   discoverable without requiring the end user to inspect source code.
+
+   Definitions.
+   - "Distribution" means making the Software or a Derivative Work available
+     to any person or organization other than yourself, whether by
+     publishing, releasing, deploying to a publicly or externally accessible
+     service (including "as a service" / hosted use reachable by outside
+     users), or distributing copies in source or compiled/binary form.
+   - "Derivative Work" means any work that incorporates, links against,
+     bundles, or is built using all or a substantial portion of the Software.
+   - Private or internal use that is never distributed, published, or made
+     externally accessible to anyone outside your own organization is NOT
+     subject to this Attribution Requirement.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+以下为中文参考翻译，**不具有法律效力**，如与上方英文正文有出入，以英文正文为准。
+
+# MIT 协议 Plus（要求署名）
+
+版权所有 (c) 2026 NightPoetry 及 WhenScript 贡献者
+
+现特此免费准许任何取得本软件及相关文档文件（下称“软件”）副本的人，不受限制地处置本软件，
+包括不受限制地使用、复制、修改、合并、出版发行、散布、再授权及/或贩售软件副本，
+以及再授权被供应本软件的人如上行为，但须满足以下条件：
+
+**1. 保留声明**：上述版权声明和本许可声明（含下方「署名要求」）应保留在软件的所有副本或实质性部分中。
+
+**2. 署名要求**：任何对软件、或基于软件产生的衍生作品（见下方定义）进行的“分发行为”（见下方定义），
+必须在该分发行为的接收者/终端用户合理可见、合理能够发现的位置（例如 README、"关于/致谢"页面、
+文档站点、启动横幅，或该媒介惯用的类似位置），提供清晰、公开的署名，至少包含：
+
+  (a) 名字 **"NightPoetry"**；以及
+  (b) 项目名 **"WhenScript"**，并附上其官方项目主页或代码仓库的链接（如分发行为发生时该链接已公开可用）。
+
+署名的具体措辞、位置与呈现形式，可根据媒介合理调整（例如 GUI 的"关于"界面、CLI 工具的
+`--version`/`--about` 输出、包管理器列表页各不相同），只要 (a)(b) 两项内容的实质得以保留，
+且终端用户无需查阅源代码即可合理地发现它。
+
+**定义**：
+- **"分发行为"**：指以任何方式，将软件或衍生作品提供给你自身组织以外的任何人或组织——
+  包括但不限于发布、对外发行、部署到可被外部访问的服务（含以"服务"形式对外提供、可被外部用户访问的托管使用），
+  或以源代码/编译后二进制形式散布副本。
+- **"衍生作品"**：指整合、链接、打包了软件的全部或实质部分，或基于软件构建的任何作品。
+- **纯粹的私下或组织内部使用，从未对外分发、发布或使得组织以外的任何人可访问的，不受本署名要求约束。**
+
+软件是"按原样"提供的，不作任何形式的明示或暗示的担保，包括但不限于对适销性、特定用途适用性
+及非侵权性的担保。在任何情况下，作者或版权持有人均不对任何索赔、损害或其他责任负责，
+无论这些追责来自合同、侵权或其它行为过程中，还是产生于、源于或有关于本软件以及本软件的使用
+或其它处置。

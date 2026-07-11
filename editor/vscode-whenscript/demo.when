@@ -1,0 +1,196 @@
+// demo.when — a highlighting test fixture for the WhenScript VS Code extension.
+// Not meant to *run* meaningfully; it's a tour through the grammar's scopes.
+/*
+ * Block comment.
+ * Second line.
+ */
+
+import { print } from "console";
+import { listen, onResponse } from "http-server";
+
+// ── primitive types + literals ────────────────────────────────────────────
+number count = 0;
+number pi = 3.14159;
+number big = 1e6;
+number hex = 0xFF;
+number binary = 0b1010;
+string name = "WhenScript";
+bool active = true;
+bool inactive = false;
+unknown missing;
+byte flag = 0x1;
+bit b0 = 0;
+
+// ── refined types ──────────────────────────────────────────────────────────
+number<int> intOnly = 42;
+number<float> floatOnly = 1.5;
+number<string> precise = "0.1";
+number<string>:2 fixedTwo = "3.14159";
+event<string> onMessage;
+event<group> onReq;
+
+// ── string interpolation ────────────────────────────────────────────────────
+string greeting = "Hello, ${name}! count = ${count + 1}";
+
+// ── functions ────────────────────────────────────────────────────────────
+number add(number a, number b) {
+    return a + b;
+}
+
+void greet(string who) {
+    print("Hello, ", who, "!");
+}
+
+// ── control flow ───────────────────────────────────────────────────────────
+number i = 0;
+while (i <= 5) {
+    i = i + 1;
+}
+for (i = 0; i < 3; i = i + 1) {
+    print(i);
+}
+
+if (count > 10) {
+    print("big");
+} else if (count > 0) {
+    print("small");
+} else {
+    print("zero");
+}
+
+switch (count) {
+    case 0 {
+        print("zero");
+    }
+    default {
+        print("other");
+    }
+};
+
+// ── reactive `when` (edge-triggered) + `changed` (every change) ───────────
+when(count == 3) {
+    print("count reached 3!");
+}
+
+changed(count) (old, now) => {
+    print("count changed from ", old, " to ", now);
+}
+
+// ── reactive binding operator `:=` ─────────────────────────────────────────
+number price = 100;
+number shipping = 8;
+number total := price + shipping;
+
+// ── event declaration + subscription + emit ────────────────────────────────
+when(onMessage) with(string m) {
+    print("[msg] ", m);
+}
+emit onMessage("hello");
+
+// with / guard / until / before / after clauses on event-when
+when(onReq) with(group req) guard notBlocked(req) {
+    bool handled = dispatch(req);
+}
+
+// before / after hooks around a when body
+when(count > 0) {
+    print("count is positive");
+} before {
+    print("about to check count");
+} after {
+    print("done checking count");
+}
+
+once(onMessage) with(string m) {
+    print("only once: ", m);
+}
+
+// ── entities: `group name = { ... }` (reactive when body has when/changed) ─
+group cart = {
+    cart.total = 0;
+    cart.items = 0;
+
+    changed(cart.total) {
+        print("[cart] total is now ", cart.total);
+    }
+    when(cart.total > 100) {
+        print("[cart] free shipping unlocked!");
+    }
+}
+
+cart.total = 40;
+delete cart;
+
+// entity with a deterministic lifetime
+group priceView = {
+    changed(price) (old, now) => {
+        print("[priceView] price -> ", now);
+    }
+} until(active);
+
+// self inside an entity
+group self_demo = {
+    self.total = 0;
+    when(self.total > 100) { print("[self_demo] over 100"); }
+} until(self.total > 1000);
+
+// ── each / delegate iteration ───────────────────────────────────────────────
+group dir = { files: [] };
+each(dir.files) with (fname) {
+    print(fname);
+}
+
+// ── turn:on / turn:off / copy:deep / copy:shallow ──────────────────────────
+when w = when(count > 0) { print("positive"); };
+turn:off w;
+turn:on w;
+
+group original = { x = 1; };
+group deepCopy = copy:deep original;
+group shallowCopy = copy:shallow original;
+
+// ── typed reference `type name` (bypasses shadowing) ────────────────────────
+string id = "user-42";
+number id = 1001;
+print("string id = ", string id);
+print("number id = ", number id);
+
+// ── bit / byte reactive circuit ─────────────────────────────────────────────
+bit a0 = 0; bit b_0 = 0; bit cin = 0;
+bit s0 := a0 ^ b_0 ^ cin;
+bit c1 := (a0 & b_0) | (cin & (a0 ^ b_0));
+bit inv := ~a0;
+bit shifted := a0 << 1;
+bit shiftedRight := a0 >> 1;
+
+// ── module exports ──────────────────────────────────────────────────────────
+number square(number x) {
+    return x * x;
+}
+export { square };
+
+// ── front-end containers (feature web) ──────────────────────────────────────
+container Dashboard() {
+  id: "dash"; pad: 16; gap: 8; bg: "#0f172a"; color: "white";
+
+  Row {
+    gap: 24; align: start;
+
+    Column {
+      gap: 10;
+      Text("WhenScript") { size: 24; weight: bold; color: "white" }
+      Button("click me") { id: "btn"; pad: (6, 12); radius: 6 }
+    }
+  }
+}
+Dashboard();
+
+// ── http server + reactive web ──────────────────────────────────────────────
+group server = listen(3017, onReq);
+when(onResponse) with(group res) {
+    if (res.contentType == "text/html" && res.status == 200) {
+        res.body = "<html></html>";
+    }
+}
+
+print("done");

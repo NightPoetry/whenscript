@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>WhenScript Playground · runner</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, sans-serif; background: #ffffff; color: #111; }
+</style>
+</head>
+<body>
+<script type="module">
+  // 这个页面单独跑在 playground 的 iframe 里:每次"运行"父页都会整个销毁旧 iframe、
+  // 换一个全新的(见 playground.html),所以这里天然是"一个干净引擎实例、只 boot 一次"。
+  // 不改 host.js 一个字——host.js 已经把 boot 结果和每次 ws_fire/ws_fire_str/ws_fire_json 的
+  // 增量输出 console.log 出来了,这里只是"劫持"console.log 把带标签的那几条转发给父页,
+  // 渲染进右栏的输出条。
+  import { boot } from "./host.js";
+
+  const post = (type, payload) => parent.postMessage({ type, ...(payload || {}) }, "*");
+
+  const origLog = console.log.bind(console);
+  console.log = (...args) => {
+    origLog(...args);
+    const [tag, text] = args;
+    // host.js 里恰好只用这几个标签 console.log 文本结果:[boot] / [ws_fire] / [ws_fire_str] / [ws_fire_json]
+    if (typeof tag === "string" && /^\[(boot|ws_fire\w*)\]$/.test(tag) && typeof text === "string" && text.length > 0) {
+      post("output", { text, isError: text.indexOf("ERROR") === 0 });
+    }
+  };
+
+  window.addEventListener("error", (e) => {
+    post("output", { text: "ERROR: " + (e.message || String(e.error || e)), isError: true });
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const r = e.reason;
+    post("output", { text: "ERROR: " + (r && r.message ? r.message : String(r)), isError: true });
+  });
+
+  let ran = false;
+  async function run(source) {
+    if (ran) return;   // 一个 iframe 实例只 boot 一次;要重跑就让父页换一个新 iframe
+    ran = true;
+    try {
+      await boot("./whenscript.wasm", source);
+      post("ready", {});
+    } catch (e) {
+      post("output", { text: "ERROR: " + (e && e.message ? e.message : String(e)), isError: true });
+    }
+  }
+
+  window.addEventListener("message", (ev) => {
+    if (ev.data && ev.data.type === "run") run(ev.data.source);
+  });
+  post("runner-ready", {});
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+// switch 选择器验证 —— url 变 → 视图自动切(容器体 switch 自动反应式,脱糖 each+reconcile+switch)
+// W6:case 体现在是完整 container_body ——`Text(...){配置块}` 直接可用(此前是解析错误的"已知瘤")。
+import { Text, Button } from "dom";
+
+string url = "/";
+
+container App() {
+  fontFamily: "system-ui, sans-serif"; padding: "16px"; maxWidth: "400px"; margin: "20px auto";
+  Text("当前路由:${url}") { id: "urlLabel"; color: "#666"; fontSize: "13px"; marginBottom: "12px" }
+  Row {
+    home = Button("首页") { marginRight: "8px"; padding: "6px 12px"; background: "#3a55d8"; color: "white"; border: "none"; borderRadius: "6px"; cursor: "pointer" }
+    cart = Button("购物车") { padding: "6px 12px"; background: "#3a55d8"; color: "white"; border: "none"; borderRadius: "6px"; cursor: "pointer" }
+  }
+  when(home) { url = "/"; }
+  when(cart) { url = "/cart"; }
+  // ★容器体 switch = 反应式选择器:url 变 → 切到匹配 case 的视图(Text 返回元素,switch 选,append)
+  switch (url) {
+    case "/"       { Text("🏠 首页内容") { id: "view"; color: "#3a55d8"; weight: bold } }
+    case "/cart"   { Text("🛒 购物车内容") { id: "view"; color: "#3a55d8"; weight: bold } }
+    default        { Text("❓ 404") { id: "view"; color: "#3a55d8"; weight: bold } }
+  }
+}
+App();

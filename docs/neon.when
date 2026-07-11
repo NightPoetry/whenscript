@@ -1,0 +1,21 @@
+// W7 验收 demo —— 图层/遮罩/混合/动效:一道光扫过卡片边框(PS 图层模型:Stack=图层组,mask=遮罩,spin=动效)。
+// 光层(conic 渐变)被 mask:ring(2) 裁成 2px 边框环,spin 转动的是渐变角(--ws-a 自定义属性),不是整个盒子——
+// 盒子若整体旋转,遮罩会跟着转,圆环视觉上会失真(方案原话:「盒子旋转会连遮罩一起转,是错的」)。
+// 另附:文字光扫(clipText + linear 渐变 + sweep)。
+import { Text } from "dom";
+
+container NeonCard() {
+  id: "neoncard"; radius: 16; pad: 24; bg: "#111";
+  Stack {
+    Box { id: "light"; bg: conic("cyan", "magenta", "cyan"); mask: ring(2); radius: 16; spin: "3s" }
+    Column {
+      pad: 16;
+      Text("光扫边框") { size: 20; weight: bold; color: "white" }
+      Text("WhenScript") {
+        id: "sweeptext"; size: 32; weight: bold;
+        bg: linear("90deg", "#888", "#fff", "#888"); clipText: true; sweep: "2s";
+      }
+    }
+  }
+}
+NeonCard();

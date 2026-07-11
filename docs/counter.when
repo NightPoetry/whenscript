@@ -1,0 +1,36 @@
+// 反应式组件 —— 在真浏览器里跑(wasm 内核 + dom 库)。展示前端范式的每根支柱:
+//   create/append 建 DOM 树 · `:=` 派生 · `if` 作为值的条件样式(v101 重收集保证可靠)·
+//   event + on 点击桥 · when 边沿 · changed 反应式渲染(谁变刷谁,无 vDOM)· timer 异步。
+import { create, setText, setAttr, setStyle, append, on } from "dom";
+import { delay } from "timer";
+
+number app   = create("div");
+number title = create("h1");
+number label = create("div");
+number btn   = create("button");
+setAttr(label, "id", "lbl");
+setAttr(btn,   "id", "btn");
+setText(title, "WhenScript 反应式组件 @ 真浏览器");
+setText(btn,   "点我 +1");
+append(app, title);
+append(app, label);
+append(app, btn);
+
+number count  = 0;
+number double := count * 2;                                  // 派生(computed)
+string color  := if (count > 2) { "crimson" } else { "black" };  // 条件样式 = `:=` + if 表达式(v101)
+
+event<group> clicked;
+on(btn, "click", clicked);
+when(clicked) { count = count + 1; }
+
+event<group> tick;
+when(tick) { count = count + 1; }                           // 定时器到点也 +1
+
+changed(count) {                                            // count 变 → 重渲染这一处(无 vDOM)
+  setText(label, "计数: " + count + " (双倍 := " + double + ")");
+  setStyle(label, "color", color);                         // color 已先 settle(glitch-free)
+}
+
+setText(label, "计数: 0 (双倍 := 0)");
+delay(1500, tick);                                         // 1.5s 后自动 +1(演示异步 timer→引擎→DOM)
