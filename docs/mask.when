@@ -1,0 +1,209 @@
+// 「用一个容器当另一个容器的蒙版」验收 demo(合成轴 · 图层设计:排布 × 合成两条正交轴)。
+// PS 杀手锏 = 拿图层 B 的形状/明度当图层 A 的蒙版。这里做成一等写法:`mask: 某容器`。
+// 蒙版源是一个装着 SVG 绘制内容(形状/文字)的 <g> 容器——Chrome 只对 SVG 内容做蒙版,不对 HTML
+// 盒子(<foreignObject> 亮度蒙版不被支持,实测证过),所以蒙版容器用 create("g")+形状拼,不是 Box。
+// 运行时原语 wsMask 把这个容器搬进共享 <defs> 的 <mask>,再让目标 `mask: url(#…)`。内核零改。
+import { create, setAttr, setStyle, setText, append, Text, Button, Input } from "dom";
+
+// ── 蒙版源拼装:一个 <g>,里面是白色 SVG 绘制(白=可见,黑/无=挖空)。坐标是目标盒子里的 px。 ──
+number maskCircle(number cx, number cy, number r) {
+  number g = create("g");
+  number c = create("circle");
+  setAttr(c, "cx", cx); setAttr(c, "cy", cy); setAttr(c, "r", r); setAttr(c, "fill", "white");
+  append(g, c);
+  return g;
+}
+// 一个可复用的"文字挖空"蒙版:大号白字,盒子按字形显现底下的内容(经典"图片嵌进文字里")。
+number maskText(string s, number x, number y, number size) {
+  number g = create("g");
+  number t = create("text");
+  setAttr(t, "x", x); setAttr(t, "y", y); setAttr(t, "text-anchor", "middle");
+  setAttr(t, "font-size", size); setAttr(t, "font-weight", "900");
+  setAttr(t, "font-family", "system-ui, sans-serif"); setAttr(t, "fill", "white");
+  setText(t, s);
+  append(g, t);
+  return g;
+}
+// 圆角方蒙版(面板 D 反应式换蒙版用)。
+number maskRoundRect(number x, number y, number w, number h, number r) {
+  number g = create("g");
+  number rc = create("rect");
+  setAttr(rc, "x", x); setAttr(rc, "y", y); setAttr(rc, "width", w); setAttr(rc, "height", h);
+  setAttr(rc, "rx", r); setAttr(rc, "fill", "white");
+  append(g, rc);
+  return g;
+}
+// ★P4★ 一个纯 HTML 盒子(<div>,不是 SVG)当蒙版源 —— 证明"任何容器都能当蒙版"。白圆角方 + 黑字,
+// luminance 模式下:圆角方显、"WS"字挖空。host 会把它光栅化成 mask-image(outerHTML 自带行内样式)。
+number htmlMaskBox() {
+  number d = create("div");
+  setStyle(d, "width", "180px"); setStyle(d, "height", "180px");
+  setStyle(d, "border-radius", "48px"); setStyle(d, "background", "white");
+  setStyle(d, "display", "flex"); setStyle(d, "align-items", "center"); setStyle(d, "justify-content", "center");
+  setStyle(d, "font", "900 46px system-ui, sans-serif"); setStyle(d, "color", "black");
+  number t = create("span"); setText(t, "WS"); append(d, t);
+  return d;
+}
+// 双色块(面板 F 演示 luminance 明度模式:白=全显、灰=半显;alpha 模式则两块全不透明=全显)。
+number maskTwoTone() {
+  number g = create("g");
+  number r1 = create("rect");
+  setAttr(r1, "x", 0); setAttr(r1, "y", 0); setAttr(r1, "width", 90); setAttr(r1, "height", 180); setAttr(r1, "fill", "#fff");
+  number r2 = create("rect");
+  setAttr(r2, "x", 90); setAttr(r2, "y", 0); setAttr(r2, "width", 90); setAttr(r2, "height", 180); setAttr(r2, "fill", "#666");
+  append(g, r1); append(g, r2);
+  return g;
+}
+
+// 蒙版源(在引用它们的容器之前声明)。
+number ringMask   = maskCircle(90, 90, 84);          // 面板 A:整圆
+number textMask   = maskText("MASK", 90, 116, 52);   // 面板 B:文字挖空(居中,x=盒中线)
+number spotCircle = create("circle");                // 面板 C:聚光灯(圆,cx 反应式跟随滑块)
+setAttr(spotCircle, "cx", 60); setAttr(spotCircle, "cy", 90);
+setAttr(spotCircle, "r", 58); setAttr(spotCircle, "fill", "white");
+number spotMask = create("g");
+append(spotMask, spotCircle);
+string spotX = "60";                                 // 反应式:滑块 → spotX → 圆的 cx + 读数文字
+
+number swapCircle = maskCircle(90, 90, 84);          // 面板 D:反应式换蒙版的两个源
+number swapRect   = maskRoundRect(20, 20, 140, 140, 28);
+bool   swapped    = false;                            // 按钮翻转 → mask 在圆↔圆角方之间切
+
+number invCircle  = maskCircle(90, 90, 66);           // 面板 E:invert(圆) → 圆挖空、圆外显
+number toneMask   = maskTwoTone();                    // 面板 F:luminance(双色块) → 白全显、灰半显
+
+number featCircle = maskCircle(90, 90, 60);           // 面板 G:feather(圆, 12) → 软边光圈
+number denCircle  = maskCircle(90, 90, 60);           // 面板 H:density(圆, .4) → 圆外也 60% 显
+number combBig    = maskCircle(72, 90, 60);           // 面板 I:subtract(大, 小) → 月牙
+number combSmall  = maskCircle(118, 90, 48);
+number htmlBox    = htmlMaskBox();                    // 面板 J:HTML <div> 盒子当蒙版(P4 光栅路)
+
+container MaskDemo() {
+  id: "maskdemo"; pad: 28; gap: 24; bg: "#0f172a"; color: "#e2e8f0"; font: "system-ui, sans-serif";
+
+  Text("容器当蒙版 · A.mask = 某容器") { size: 24; weight: bold; color: "white" }
+  Text("蒙版是容器的功能:拿一个容器的形状/文字当另一个容器的蒙版(PS 图层模型,合成轴)") {
+    size: 14; color: "#94a3b8"; marginBottom: 4
+  }
+
+  Row {
+    gap: 24; align: start; cramped: ["wrap"];
+
+    // ── 面板 A:形状蒙版(整圆显现渐变) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelA"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#f43f5e", "#f59e0b");
+        mask: ringMask;
+      }
+      Text("形状蒙版 · mask: ringMask") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 B:文字挖空(渐变嵌进文字里) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelB"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#6366f1", "#22d3ee");
+        mask: textMask;
+      }
+      Text("文字挖空 · mask: textMask") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 C:反应式聚光灯(蒙版容器的内容随滑块移动) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelC"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#a855f7", "#ec4899", "#f59e0b");
+        mask: spotMask;
+      }
+      Text("↓ 拖这条滑块(不是拖上面的圆)") { size: 13; weight: bold; color: "#fbbf24" }
+      slide = Input() { id: "spot"; type: "range"; min: "0"; max: "180"; value: "60"; width: 180 }
+      when(slide) with(string s) { spotX = s; }
+      changed(spotX) { setAttr(spotCircle, "cx", spotX); }
+      Text("聚光灯 cx = ${spotX}(拖滑块时这个数应实时变)") { id: "spotread"; size: 15; weight: bold; color: "#34d399" }
+    }
+
+    // ── 面板 D:反应式【换蒙版】—— mask 和 bg 同一条规则(P1 架构核心) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelD"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#10b981", "#3b82f6");
+        mask: if(swapped){ swapRect } else { swapCircle };   // ← 变量一变,蒙版整个换,和 bg 一模一样
+      }
+      swapBtn = Button("换蒙版(圆 ↔ 圆角方)") { id: "swapbtn"; pad: (6, 12); radius: 6 }
+      when(swapBtn) { swapped = !swapped; }
+      Text("反应式换蒙版 · mask: if(swapped){方}else{圆}") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 E:invert 算子(圆挖空,圆外显) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelE"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#f97316", "#eab308");
+        mask: invert(invCircle);
+      }
+      Text("反相 · mask: invert(圆)") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 F:luminance 模式(白全显、灰半显 —— PS 明度蒙版/位图蒙版的核心) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelF"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#06b6d4", "#8b5cf6");
+        mask: luminance(toneMask);
+      }
+      Text("明度模式 · mask: luminance(双色块)") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 G:feather 羽化(软边) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelG"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#ec4899", "#8b5cf6");
+        mask: feather(featCircle, 12);
+      }
+      Text("羽化 · mask: feather(圆, 12)") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 H:density 密度(圆外也部分显) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelH"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#14b8a6", "#f59e0b");
+        mask: density(denCircle, 0.4);
+      }
+      Text("密度 · mask: density(圆, .4)") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 I:combine 组合(subtract = 月牙) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelI"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#3b82f6", "#ec4899");
+        mask: subtract(combBig, combSmall);
+      }
+      Text("组合 · mask: subtract(大圆, 小圆)") { size: 13; color: "#cbd5e1" }
+    }
+
+    // ── 面板 J:HTML 盒子当蒙版(P4 —— 任何容器可蒙版,非 SVG 也行) ──
+    Column {
+      gap: 10;
+      Box {
+        id: "panelJ"; width: 180; height: 180; radius: 8;
+        bg: linear("135deg", "#22c55e", "#0ea5e9");
+        mask: luminance(htmlBox);
+      }
+      Text("HTML 盒子当蒙版 · mask: luminance(div)") { size: 13; color: "#cbd5e1" }
+    }
+  }
+}
+MaskDemo();

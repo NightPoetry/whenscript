@@ -93,6 +93,55 @@ const gameTick = (tms) => {
   }
 };
 
+// ── audio:Web Audio 实时合成音效(host_audio_play 的宿主侧)──────────────────
+// 引擎只推一个音效【名字】过桥(零采样、零版权),宿主用 Web Audio 现场合成 → 神似但不复制任何原版采样。
+// 懒创建【单个】AudioContext;每次播放前若 suspended 就 resume(浏览器要求音频必须在用户手势后才能响,
+// 游戏第一次点击=开始=播 hmm 正好是那次手势)。AudioContext 不可用/被拦 → 静默跳过(库不 throw)。
+let AC = null;                                   // null=未初始化,false=不可用(静默),否则=AudioContext
+const audioCtx = () => {
+  if (AC === null) {
+    try { AC = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (_e) { AC = false; }                   // 环境无 Web Audio → 永久静默
+  }
+  if (AC && AC.state === "suspended") { try { AC.resume(); } catch (_e) {} }  // 用户手势后解锁
+  return AC || null;
+};
+// 一段【包络化】振荡器:type 波形、f0→f1 滑音(f1 省略=定频)、dur 时长秒、gain 峰值、
+// filter 可选带通(模拟共振腔)、when 起始偏移秒(拼多段)。ADSR 极简:快起音 → 峰值 → 指数衰减到静音。
+const blip = (ctx, o) => {
+  const t0 = ctx.currentTime + (o.when || 0), dur = o.dur, gain = o.gain === undefined ? 0.2 : o.gain;
+  const osc = ctx.createOscillator();
+  osc.type = o.type || "sine";
+  osc.frequency.setValueAtTime(o.f0, t0);
+  if (o.f1 !== undefined) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1), t0 + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t0);             // 指数包络不能从/到 0,用极小值代替静音
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  let node = osc;
+  if (o.filter) {                                // 带通:鼻腔/共振腔染色(hmm 的"嗯"靠它)
+    const bq = ctx.createBiquadFilter();
+    bq.type = o.filter.type || "bandpass";
+    bq.frequency.value = o.filter.freq;
+    if (o.filter.q !== undefined) bq.Q.value = o.filter.q;
+    node.connect(bq); node = bq;
+  }
+  node.connect(g); g.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+};
+// 音效目录(名字 → 合成配方)。加新音效只改这里,引擎一行不动(和 game2d.image 不知道像素同理)。
+const SOUNDS = {
+  // hit:史蒂夫受击的"哦/呃"——方波 300→130Hz、150ms、快速衰减,闷闷低沉的一声
+  hit:   (ctx) => blip(ctx, { type: "square", f0: 300, f1: 130, dur: 0.15, gain: 0.30 }),
+  // hmm:村民"嗯~哼"——三角波过带通(鼻腔共振)分两段:第一段 190→210 平/微升,短停顿,第二段 210→150 降调
+  hmm:   (ctx) => { blip(ctx, { type: "triangle", f0: 190, f1: 210, dur: 0.16, gain: 0.24, filter: { freq: 900, q: 6 } });
+                    blip(ctx, { type: "triangle", f0: 210, f1: 150, dur: 0.22, gain: 0.24, filter: { freq: 800, q: 6 }, when: 0.22 }); },
+  // score:清脆上扬的"叮"——正弦 800→1200Hz、80ms
+  score: (ctx) => blip(ctx, { type: "sine", f0: 800, f1: 1200, dur: 0.08, gain: 0.18 }),
+  // flap:短促拍打——三角波 520→380Hz、60ms、轻(每次点击都响,故意小声不喧宾夺主)
+  flap:  (ctx) => blip(ctx, { type: "triangle", f0: 520, f1: 380, dur: 0.06, gain: 0.12 }),
+};
+
 const imports = { env: {
   // create(tag) → 新元素;先挂 body,被 append 到别处时浏览器自动移走 → 只有「根」留在 body。
   host_create: (tp, tl) => {
@@ -254,6 +303,16 @@ const imports = { env: {
   host_game_tile:  (sid, tw, th)  => { const s = G && G.sprites[sid - 1]; if (s) { s.tile = true; s.tw = tw; s.th = th; s.pat = null; } },
   // frames(event):登记帧事件源 —— 每帧经 fireJson 回灌 event<group> 载荷 {dt, t}(游戏时钟,取代 delay 链)。
   host_game_frames: (evid)        => { if (G) G.frameEvs.push(evid); },
+  // ── audio:sound(name) → 现场合成播放(实现见上方 SOUNDS/blip)────────────
+  // 未知名 → console.warn(不静默、不 throw);AudioContext 不可用或合成异常 → 静默跳过(库不炸)。
+  host_audio_play: (np, nl) => {
+    const name = dec(np, nl);
+    const make = SOUNDS[name];
+    if (!make) { console.warn("[audio] 未知音效:" + name); return; }
+    const ctx = audioCtx();
+    if (!ctx) return;                            // 无 Web Audio → 静默跳过
+    try { make(ctx); } catch (_e) {}             // 合成失败也不炸
+  },
 }};
 
 const mem = () => X.memory.buffer;

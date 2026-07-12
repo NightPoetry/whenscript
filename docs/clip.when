@@ -1,0 +1,38 @@
+// P5 剪贴蒙版(clipping mask)验收 —— 底层【可见】+ 裁剪其上的层(真 PS 剪贴组,不是 mask: 那种吃掉源)。
+// 写法:内容层 `clipTo: base` = 把这层裁到 base 的形状;base 用 `<use>` 活引用(反应式、不克隆)、留在原地。
+// base 必须是 SVG 形状(<use> 只引用 SVG);base 与目标同尺寸叠放(坐标对齐)。
+import { create, setAttr, setStyle, append, Text } from "dom";
+
+// 一个五角星 SVG 当剪贴底(可见)。
+number starBase() {
+  number svg = create("svg");
+  setAttr(svg, "viewBox", "0 0 180 180"); setAttr(svg, "width", "180"); setAttr(svg, "height", "180");
+  setStyle(svg, "position", "absolute"); setStyle(svg, "top", "0"); setStyle(svg, "left", "0");
+  number star = create("polygon");
+  setAttr(star, "points", "90,8 112,68 176,68 124,106 144,172 90,132 36,172 56,106 4,68 68,68");
+  setAttr(star, "fill", "#1e293b");
+  append(svg, star);
+  return svg;
+}
+number base = starBase();
+
+container ClipDemo() {
+  id: "clipdemo"; pad: 24; gap: 16; bg: "#0f172a"; color: "#e2e8f0"; font: "system-ui, sans-serif";
+
+  Text("剪贴蒙版 · clipTo:base —— 内容裁到底层形状(底层可见,<use> 活引用)") {
+    size: 18; weight: bold; color: "white"
+  }
+
+  Box {
+    id: "clipstack"; width: 180; height: 180; position: "relative";
+    // 底层:五角星(可见,绝对定位在左上)。用 append 放进本容器当底。
+    append(self, base);
+    // 内容层:渐变,裁到 base 的星形。
+    Box {
+      id: "clipcontent"; width: 180; height: 180; position: "absolute"; top: 0; left: 0;
+      bg: linear("135deg", "#f43f5e", "#8b5cf6", "#22d3ee");
+      clipTo: base;
+    }
+  }
+}
+ClipDemo();

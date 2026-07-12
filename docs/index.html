@@ -89,7 +89,7 @@
   @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,180,84,.5); } 50% { box-shadow: 0 0 0 6px rgba(255,180,84,0); } }
   .live-src {
     margin: 0; padding: 14px 16px; overflow-x: auto;
-    font: 12.5px/1.6 var(--mono); tab-size: 2; white-space: pre;
+    font: 12.5px/1.6 var(--mono); tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere;
     border-bottom: 1px solid var(--line);
   }
   .live-stage { background: #fff; height: 190px; }
@@ -147,7 +147,7 @@
     color: var(--dim); border-bottom: 1px solid var(--line);
   }
   .vs-label.win { color: var(--signal); }
-  .vs-col pre { margin: 0; padding: 16px; overflow-x: auto; font: 13px/1.65 var(--mono); tab-size: 2; }
+  .vs-col pre { margin: 0; padding: 16px; overflow-x: auto; font: 13px/1.65 var(--mono); tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; }
   .vs-punch { margin-top: 22px; color: var(--dim); font-size: 15px; }
   .vs-punch strong { color: var(--signal); }
 
@@ -169,7 +169,7 @@
   .install-card p { color: var(--dim); font-size: 14px; margin: 0 0 14px; }
   .cmd {
     display: block; background: var(--bg-deep); border: 1px solid var(--line); border-radius: 8px;
-    padding: 12px 14px; font: 13px/1.5 var(--mono); color: var(--ok); overflow-x: auto; white-space: pre;
+    padding: 12px 14px; font: 13px/1.5 var(--mono); color: var(--ok); overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere;
   }
 
   footer {

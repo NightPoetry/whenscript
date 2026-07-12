@@ -1,0 +1,35 @@
+// 窗口级感知信号验证 —— 拖拽浏览器窗口,列数随 window.innerWidth 反应式切换(全局信号,非容器宽度)。
+// group win = {width:0,height:0}; registerWindow(win); → host 把 innerWidth/innerHeight 推进 win 的 backing group。
+// cols := if (win.width > 800) {4} else {...} 跟 win.width 自动变(:= 反应式绑定 + changed effect,无需 when)。
+import { Text, Button, registerWindow } from "dom";
+
+group win = { width: 0, height: 0 };
+registerWindow(win);                       // 全局 window 信号:host resize → writeField(WINDOW_ID,"width"/"height",...)
+
+group items = [];
+number n = 0;
+
+container ResponsiveGrid() {
+  display: "grid"; gap: "8px"; padding: "16px";
+  background: "#f0f4ff"; borderRadius: "12px"; margin: "16px 0"; minHeight: "60px";
+  // ★全局感知信号★:cols 随 win.width(window.innerWidth)反应式变 —— 替代媒体查询,纯反应式
+  cols := if (win.width > 800) { 4 } else { if (win.width > 500) { 3 } else { 2 } };
+  changed(cols) { setStyle(self, "grid-template-columns", "repeat(" + cols + ", 1fr)"); }
+  setStyle(self, "grid-template-columns", "repeat(2, 1fr)");
+  Text("窗口 ${win.width}×${win.height} → ${cols} 列") { id: "label"; color: "#3a55d8"; fontWeight: "600"; padding: "4px" }
+  each(items) with(it) {
+    padding: "12px"; background: "white"; borderRadius: "8px";
+    textAlign: "center"; fontWeight: "600"; color: "#3a55d8";
+    Text("${it}")
+  }
+}
+
+container App() {
+  fontFamily: "system-ui, sans-serif"; maxWidth: "640px"; margin: "20px auto"; padding: "0 16px";
+  Text("窗口感知信号 · 全局 win.width") { fontSize: "20px"; fontWeight: "700" }
+  Text("拖拽浏览器窗口宽度 → 列数在 2/3/4 间切换(读 window.innerWidth,非容器尺寸)") { color: "#666"; fontSize: "13px"; margin: "6px 0" }
+  addBtn = Button("加一项") { border: "none"; borderRadius: "8px"; padding: "8px 16px"; background: "#3a55d8"; color: "white"; cursor: "pointer"; margin: "8px 0" }
+  when(addBtn) { items[n] = "项 " + n; n = n + 1; }
+  ResponsiveGrid()
+}
+App();

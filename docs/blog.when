@@ -1,0 +1,486 @@
+// 个人博客 —— 前端语法综合演示(对照 blog-reference.html)。
+// 真 SVG 全部由现有通用原语 create/setAttr/append 手拼(无新语法):血系头像光晕、技能环形进度条、
+// 页脚波浪分割线、社交/主题图标——全部真实 <svg>/<circle>/<path> 元素(host.js 已修 SVG 命名空间坑)。
+// 在线真实图片走 Image(url)(picsum.photos 随机照片 + pravatar.cc 头像),不是本地资源。
+import { create, setAttr, setStyle, append, query, setText, on, Text, Button, Input, Select, Checkbox, Textarea, Image } from "dom";
+import { contains, len } from "strings";
+
+// ── SVG 基础拼装原语(只由 create/setAttr/append 组合,零新语法) ──
+number svgRoot(string viewBox) {
+  number svg = create("svg");
+  setAttr(svg, "viewBox", viewBox);
+  setAttr(svg, "fill", "none");
+  return svg;
+}
+void svgLine(number svg, string x1, string y1, string x2, string y2, string stroke) {
+  number l = create("line");
+  setAttr(l, "x1", x1); setAttr(l, "y1", y1); setAttr(l, "x2", x2); setAttr(l, "y2", y2);
+  setAttr(l, "stroke", stroke); setAttr(l, "stroke-width", "2"); setAttr(l, "stroke-linecap", "round");
+  append(svg, l);
+}
+number svgCircle(number svg, string cx, string cy, string r, string fill, string stroke) {
+  number c = create("circle");
+  setAttr(c, "cx", cx); setAttr(c, "cy", cy); setAttr(c, "r", r);
+  setAttr(c, "fill", fill); setAttr(c, "stroke", stroke); setAttr(c, "stroke-width", "2");
+  append(svg, c);
+  return c;
+}
+void svgPolyline(number svg, string points, string stroke) {
+  number pl = create("polyline");
+  setAttr(pl, "points", points); setAttr(pl, "fill", "none");
+  setAttr(pl, "stroke", stroke); setAttr(pl, "stroke-width", "2"); setAttr(pl, "stroke-linecap", "round"); setAttr(pl, "stroke-linejoin", "round");
+  append(svg, pl);
+}
+void svgRect(number svg, string x, string y, string w, string h, string rx, string fill, string stroke) {
+  number r = create("rect");
+  setAttr(r, "x", x); setAttr(r, "y", y); setAttr(r, "width", w); setAttr(r, "height", h); setAttr(r, "rx", rx);
+  setAttr(r, "fill", fill); setAttr(r, "stroke", stroke); setAttr(r, "stroke-width", "2");
+  append(svg, r);
+}
+void svgPolygon(number svg, string points, string fill) {
+  number pg = create("polygon");
+  setAttr(pg, "points", points); setAttr(pg, "fill", fill); setAttr(pg, "stroke", "none");
+  append(svg, pg);
+}
+
+// ── 图标(全部直线/圆/多边形拼成,真实 SVG,避免手抄贝塞尔曲线出错) ──
+number iconCode(string color) {
+  number svg = svgRoot("0 0 24 24");
+  setAttr(svg, "width", "18"); setAttr(svg, "height", "18");
+  svgPolyline(svg, "8,6 2,12 8,18", color);
+  svgPolyline(svg, "16,6 22,12 16,18", color);
+  return svg;
+}
+number iconChat(string color) {
+  number svg = svgRoot("0 0 24 24");
+  setAttr(svg, "width", "18"); setAttr(svg, "height", "18");
+  svgRect(svg, "2", "4", "20", "14", "4", "none", color);
+  svgPolygon(svg, "8,18 8,22 13,18", color);
+  return svg;
+}
+number iconMail(string color) {
+  number svg = svgRoot("0 0 24 24");
+  setAttr(svg, "width", "18"); setAttr(svg, "height", "18");
+  svgRect(svg, "2", "4", "20", "16", "2", "none", color);
+  svgPolyline(svg, "2,6 12,14 22,6", color);
+  return svg;
+}
+number iconSearchSmall(string color) {
+  number svg = svgRoot("0 0 24 24");
+  setAttr(svg, "width", "16"); setAttr(svg, "height", "16");
+  svgCircle(svg, "10", "10", "7", "none", color);
+  svgLine(svg, "15", "15", "21", "21", color);
+  return svg;
+}
+number iconSun(string color) {
+  number svg = svgRoot("0 0 24 24");
+  setAttr(svg, "width", "18"); setAttr(svg, "height", "18");
+  svgCircle(svg, "12", "12", "5", "none", color);
+  svgLine(svg, "20", "12", "23", "12", color);
+  svgLine(svg, "17.66", "17.66", "19.78", "19.78", color);
+  svgLine(svg, "12", "20", "12", "23", color);
+  svgLine(svg, "6.34", "17.66", "4.22", "19.78", color);
+  svgLine(svg, "4", "12", "1", "12", color);
+  svgLine(svg, "6.34", "6.34", "4.22", "4.22", color);
+  svgLine(svg, "12", "4", "12", "1", color);
+  svgLine(svg, "17.66", "6.34", "19.78", "4.22", color);
+  return svg;
+}
+number iconMoon(string color, string bgc) {
+  number svg = svgRoot("0 0 24 24");
+  setAttr(svg, "width", "18"); setAttr(svg, "height", "18");
+  svgCircle(svg, "12", "12", "7", color, color);
+  svgCircle(svg, "15.5", "9", "6", bgc, bgc);
+  return svg;
+}
+number iconChip(number icon) {
+  number chip = create("div");
+  setStyle(chip, "width", "36px"); setStyle(chip, "height", "36px"); setStyle(chip, "border-radius", "50%");
+  setStyle(chip, "background", "#ffffff"); setStyle(chip, "border", "1px solid #e6e8f2");
+  setStyle(chip, "display", "flex"); setStyle(chip, "align-items", "center"); setStyle(chip, "justify-content", "center");
+  append(chip, icon);
+  return chip;
+}
+
+// ── 复合 SVG:头像光晕 / 技能环共享渐变 / 页脚波浪(全部真实 <svg>,非 Image) ──
+number buildSharedDefs() {
+  number svg = create("svg");
+  setAttr(svg, "width", "0"); setAttr(svg, "height", "0");
+  setStyle(svg, "position", "absolute");
+  number defs = create("defs");
+  number grad = create("linearGradient");
+  setAttr(grad, "id", "ringGrad"); setAttr(grad, "x1", "0"); setAttr(grad, "y1", "0"); setAttr(grad, "x2", "1"); setAttr(grad, "y2", "1");
+  number s1 = create("stop"); setAttr(s1, "offset", "0%"); setAttr(s1, "stop-color", "#6d5dfc"); append(grad, s1);
+  number s2 = create("stop"); setAttr(s2, "offset", "100%"); setAttr(s2, "stop-color", "#46c2ff"); append(grad, s2);
+  append(defs, grad);
+  append(svg, defs);
+  return svg;
+}
+number buildHeroBlobs() {
+  number svg = create("svg");
+  setAttr(svg, "viewBox", "0 0 800 400"); setAttr(svg, "preserveAspectRatio", "xMidYMid slice");
+  setStyle(svg, "position", "absolute"); setStyle(svg, "top", "0"); setStyle(svg, "left", "0");
+  setStyle(svg, "width", "100%"); setStyle(svg, "height", "100%"); setStyle(svg, "z-index", "0");
+  number defs = create("defs");
+  number g1 = create("linearGradient");
+  setAttr(g1, "id", "heroG1"); setAttr(g1, "x1", "0"); setAttr(g1, "y1", "0"); setAttr(g1, "x2", "1"); setAttr(g1, "y2", "1");
+  number g1s1 = create("stop"); setAttr(g1s1, "offset", "0%"); setAttr(g1s1, "stop-color", "#6d5dfc"); setAttr(g1s1, "stop-opacity", "0.35"); append(g1, g1s1);
+  number g1s2 = create("stop"); setAttr(g1s2, "offset", "100%"); setAttr(g1s2, "stop-color", "#46c2ff"); setAttr(g1s2, "stop-opacity", "0.05"); append(g1, g1s2);
+  append(defs, g1);
+  number g2 = create("linearGradient");
+  setAttr(g2, "id", "heroG2"); setAttr(g2, "x1", "1"); setAttr(g2, "y1", "0"); setAttr(g2, "x2", "0"); setAttr(g2, "y2", "1");
+  number g2s1 = create("stop"); setAttr(g2s1, "offset", "0%"); setAttr(g2s1, "stop-color", "#ff6bcb"); setAttr(g2s1, "stop-opacity", "0.28"); append(g2, g2s1);
+  number g2s2 = create("stop"); setAttr(g2s2, "offset", "100%"); setAttr(g2s2, "stop-color", "#6d5dfc"); setAttr(g2s2, "stop-opacity", "0.03"); append(g2, g2s2);
+  append(defs, g2);
+  append(svg, defs);
+  number blob1 = svgCircle(svg, "150", "120", "220", "url(#heroG1)", "none");
+  setStyle(blob1, "filter", "blur(50px)");
+  // 不再旋转:旋转会让左上那团蓝色绕出可视区(过一会儿"蓝色背景就不见了")。参照版的 blob 是静止的,
+  // 蓝色光晕始终固定在头像后面——这里对齐参照版,去掉 ws-spin-box 动画。
+  number blob2 = svgCircle(svg, "650", "260", "240", "url(#heroG2)", "none");
+  setStyle(blob2, "filter", "blur(60px)");
+  return svg;
+}
+number buildWaveDivider() {
+  number svg = create("svg");
+  setAttr(svg, "viewBox", "0 0 1440 100"); setAttr(svg, "preserveAspectRatio", "none");
+  setStyle(svg, "display", "block"); setStyle(svg, "width", "100%"); setStyle(svg, "height", "60px");
+  number path = create("path");
+  setAttr(path, "d", "M0,64L48,58.7C96,53,192,43,288,48C384,53,480,75,576,80C672,85,768,75,864,64C960,53,1056,43,1152,48C1248,53,1344,75,1392,85.3L1440,96L1440,0L0,0Z");
+  setAttr(path, "fill", bgColor);
+  changed(bgColor) { setAttr(path, "fill", bgColor); }
+  append(svg, path);
+  return svg;
+}
+
+// ── 主题(暗/亮)+ 派生配色:同 NavBar 的 self.width 惯用法,module 级反应式变量直接被容器读取 ──
+bool dark = false;
+bgColor := if (dark) { "#0f1220" } else { "#f7f8fc" };
+fgColor := if (dark) { "#e8e8f2" } else { "#1c1e26" };
+cardColor := if (dark) { "#1a1e2e" } else { "#ffffff" };
+lineColor := if (dark) { "#2a2f45" } else { "#e6e8f2" };
+subColor := if (dark) { "#9296ab" } else { "#666a80" };
+
+// ── 文章数据 + 搜索/分类过滤(同 shop2.when 的 filterBy 套路) ──
+group posts = [
+  { id: 1, title: "用 when 拥抱世界:反应式编程的第一性原理", excerpt: "从「写入即触发」出发,聊聊事件驱动语言到底解决了什么问题。", tag: "语言设计", img: "https://picsum.photos/seed/post1/400/240", likes: 24 },
+  { id: 2, title: "把 Rust 当宿主:从 TS 到内核重写的一年", excerpt: "为什么我们把整条求值管线搬进 Rust,又保住了哪些语义契约。", tag: "工程实践", img: "https://picsum.photos/seed/post2/400/240", likes: 41 },
+  { id: 3, title: "组合逻辑电路模型:when 到底在计算什么", excerpt: "把反应式求值类比成电路,能帮你直觉地理解级联与收敛。", tag: "语言设计", img: "https://picsum.photos/seed/post3/400/240", likes: 33 },
+  { id: 4, title: "透明并行:写单线程代码,吃满多核", excerpt: "细粒度读写集分析如何在不改一行用户代码前提下并行执行。", tag: "性能", img: "https://picsum.photos/seed/post4/400/240", likes: 58 },
+  { id: 5, title: "前端也是插件:让语言核心永远不知道 DOM 的存在", excerpt: "解耦的代价与收益——一次真实的「拔除演练」。", tag: "架构", img: "https://picsum.photos/seed/post5/400/240", likes: 19 },
+  { id: 6, title: "周末随笔:写语言这件事教会我的耐心", excerpt: "关于调试一个诡异 bug 直到凌晨三点的那些事。", tag: "随笔", img: "https://picsum.photos/seed/post6/400/240", likes: 12 }
+];
+group cats = [ "全部", "语言设计", "工程实践", "性能", "架构", "随笔" ];
+string searchQuery = "";
+string category = "全部";
+group visiblePosts = posts;
+
+number sizeOf(group g) {
+  number k = 0;
+  each(g) with(x) { k = k + 1; }
+  return k;
+}
+group filterPosts(group all, string q, string cat) {
+  group out = {};
+  number i = 0;
+  each(all) with(post) {
+    bool matchCat = (cat == "全部") || (post.tag == cat);
+    bool matchQuery = (q == "") || contains(post.title, q) || contains(post.excerpt, q);
+    if (matchCat && matchQuery) { out[i] = post; i = i + 1; }
+  }
+  return out;
+}
+changed(searchQuery) { visiblePosts = filterPosts(posts, searchQuery, category); }
+changed(category) { visiblePosts = filterPosts(posts, searchQuery, category); }
+number found := sizeOf(visiblePosts);
+
+// ── 技能环(4 个,独立反应式变量;传共享 group + 字段名,组内任一字段变都联动重算,符合 group 粗粒度 notify) ──
+group skills = { p1: 92, p2: 85, p3: 88, p4: 76 };
+number skillIdx = 0;
+
+number buildSkillRing(string label, group skills, string field) {
+  number wrap = create("div");
+  setStyle(wrap, "display", "flex"); setStyle(wrap, "flex-direction", "column");
+  setStyle(wrap, "align-items", "center"); setStyle(wrap, "gap", "8px");
+  number svg = create("svg");
+  setAttr(svg, "viewBox", "0 0 100 100"); setAttr(svg, "width", "100"); setAttr(svg, "height", "100");
+  number bgC = svgCircle(svg, "50", "50", "40", "none", "#e6e8f2");
+  setAttr(bgC, "stroke-width", "10");
+  number fgC = svgCircle(svg, "50", "50", "40", "none", "url(#ringGrad)");
+  setAttr(fgC, "stroke-width", "10");
+  setAttr(fgC, "stroke-dasharray", "251.2");
+  setAttr(fgC, "stroke-linecap", "round");
+  setAttr(fgC, "transform", "rotate(-90 50 50)");
+  setStyle(fgC, "transition", "stroke-dashoffset 1s ease");
+  append(wrap, svg);
+  number pctText = create("span");
+  setStyle(pctText, "font-weight", "700"); setStyle(pctText, "font-size", "15px");
+  append(wrap, pctText);
+  number labelText = create("span");
+  setText(labelText, label);
+  setStyle(labelText, "font-size", "13px"); setStyle(labelText, "color", "#666a80");
+  append(wrap, labelText);
+  offset := 251.2 - (251.2 * skills[field] / 100);
+  changed(offset) {
+    setAttr(fgC, "stroke-dashoffset", offset);
+    setText(pctText, "" + skills[field] + "%");
+  }
+  setAttr(fgC, "stroke-dashoffset", offset);
+  setText(pctText, "" + skills[field] + "%");
+  return wrap;
+}
+
+// ── 联系表单状态(同 form.when 的校验惯用法) ──
+group topics = [ "合作洽谈", "问题反馈", "纯粹打个招呼" ];
+string cName  = "";
+string cEmail = "";
+string cMsg   = "";
+string cAgree = "false";
+bool   cSubmitted = false;
+cValid := len(cName) > 0 && contains(cEmail, "@") && len(cMsg) > 0 && cAgree == "true";
+
+// ── 居中内容列(对照 blog-reference.html 的 .wrap:max-width:960px; margin:0 auto)──
+// 每个区块(NavBar/Hero/…)是一条通栏背景带(bg/border 铺满窗口),真正的内容收进这条 960px 居中列里,
+// 免得内容贴着窗口两边、文章网格铺成 4 列而非 3 列。WrapRow=横向(导航/hero),WrapCol=纵向(其余区块)。
+// width:fill 含进内边距不溢出,靠框架的 border-box 默认(host.js 注入 *{box-sizing:border-box}),不用手写。
+container WrapRow() extends Row {
+  width: fill; maxWidth: "960px"; margin: "0 auto"; alignItems: "center";
+}
+container WrapCol() extends Column {
+  width: fill; maxWidth: "960px"; margin: "0 auto";
+}
+
+// ── 主题开关:双图标叠放 + changed 切显隐(同一按钮内两枚图标,按 dark 切换 display) ──
+container ThemeToggle() {
+  radius: 999; width: 34; height: 34; bg: "#ffffff"; border: "1px solid #e6e8f2"; overflow: "hidden";
+  number sun = iconSun("#1c1e26");
+  number moon = iconMoon("#1c1e26", "#ffffff");
+  // 图标包一层 Box(div)再放进按钮:<svg> 直接做 <button> 的 flex 子项时会被按内容量成 ~5px 宽(浏览器
+  // 对 button 的内在尺寸处理);包进普通 div flex 容器就和社交图标(iconChip)一样正常量成 18px。
+  toggle = Button("") {
+    display: "flex"; alignItems: "center"; justifyContent: "center"; width: fill; height: fill;
+    background: "transparent"; border: "none"; cursor: pointer; padding: "0";
+    Box {
+      display: "flex"; alignItems: "center"; justifyContent: "center";
+      append(self, sun);
+      append(self, moon);
+    }
+  }
+  // 显隐用 display:none / ""(空串=还原成 <svg> 的默认 display)。别用 inline-flex/block——那会把 <svg>
+  // 当成块/弹性子项、被 flex 尺寸算法按内容量出 ~5px 而无视 width 属性;默认 display 才按 width 属性量成 18px。
+  // 对照参照版 `dark ? SUN : MOON`:亮色显示月亮(点它切暗色),暗色显示太阳。
+  sunDisp := if (dark) { "" } else { "none" };
+  changed(sunDisp) { setStyle(sun, "display", sunDisp); }
+  setStyle(sun, "display", sunDisp);
+  moonDisp := if (dark) { "none" } else { "" };
+  changed(moonDisp) { setStyle(moon, "display", moonDisp); }
+  setStyle(moon, "display", moonDisp);
+}
+
+container NavBar() {
+  id: "navbar"; bg: cardColor; borderBottom: "1px solid " + lineColor;
+  position: "sticky"; top: 0; zIndex: "20"; backdropFilter: "blur(6px)";
+  WrapRow {
+    gap: 20; pad: (14, 20);
+    Text("✳ Max 的博客") { weight: 800; size: 18; bg: linear("90deg", "#6d5dfc", "#46c2ff"); clipText: true; }
+    Row {
+      marginLeft: "auto"; gap: 18; color: subColor; size: 14;
+      Text("首页")
+      Text("文章")
+      Text("技能")
+      Text("联系")
+    }
+    tt = ThemeToggle();
+    when(tt.toggle) { dark = !dark; }
+  }
+}
+
+container Hero() {
+  position: "relative"; overflow: "hidden"; pad: (64, 0, 48, 0);
+  number blobs = buildHeroBlobs();
+  append(self, blobs);
+  WrapRow {
+    position: "relative"; zIndex: "1"; gap: 32; pad: (0, 20);
+    Image("https://i.pravatar.cc/300?img=12") { width: 132; height: 132; radius: 999; objectFit: "cover"; border: "4px solid white"; shadow: "0 8px 24px rgba(0,0,0,.12)"; flexShrink: "0"; }
+    Column {
+      Text("Max") { id: "authorName"; size: 30; weight: bold; marginBottom: 6; }
+      Text("写代码,也写语言本身。反应式系统 / 语言设计 / 前端架构。") { color: subColor; size: 15; marginBottom: 14; }
+      Row {
+        gap: 10;
+        append(self, iconChip(iconCode("#1c1e26")));
+        append(self, iconChip(iconChat("#1c1e26")));
+        append(self, iconChip(iconMail("#1c1e26")));
+      }
+    }
+  }
+}
+
+container SkillsSection() {
+  pad: (36, 0);
+  WrapCol {
+    pad: (0, 20);
+    Text("技能") { size: 20; weight: bold; marginBottom: 18; }
+    Row {
+      id: "ringgrid"; gap: 28; flexWrap: "wrap"; marginBottom: 16;
+      append(self, buildSkillRing("WhenScript", skills, "p1"));
+      append(self, buildSkillRing("Rust", skills, "p2"));
+      append(self, buildSkillRing("反应式架构", skills, "p3"));
+      append(self, buildSkillRing("并发调优", skills, "p4"));
+    }
+    reroll = Button("🔄 重新评估技能") { id: "rerollBtn"; width: hug; pad: (8, 16); radius: 8; border: "none"; bg: linear("90deg", "#6d5dfc", "#46c2ff"); color: "white"; weight: 600; cursor: pointer; }
+    when(reroll) {
+      skillIdx = (skillIdx + 1) % 3;
+      if (skillIdx == 0) { skills["p1"] = 92; skills["p2"] = 85; skills["p3"] = 88; skills["p4"] = 76; }
+      if (skillIdx == 1) { skills["p1"] = 97; skills["p2"] = 90; skills["p3"] = 81; skills["p4"] = 84; }
+      if (skillIdx == 2) { skills["p1"] = 88; skills["p2"] = 95; skills["p3"] = 93; skills["p4"] = 70; }
+    }
+  }
+}
+
+container PostCard(group post) extends Column {
+  bg: cardColor; border: "1px solid " + lineColor; radius: 14; overflow: "hidden"; shadow: "0 1px 3px rgba(30,40,90,.06)";
+  class: "postcard";
+  number likes = post.likes;
+  Image(post.img) { width: fill; height: 140; objectFit: "cover"; display: "block"; }
+  Column {
+    pad: 14;
+    // width:hug 让标签收缩到内容宽(小药丸)。卡片正文是 flex 列,默认子项会被拉满整卡宽;`hug`(=fit-content)
+    // 是"收缩到内容"的意图词,可靠地压过 flex 的 stretch——比 alignSelf/inline-block 这类 CSS 咒语干净。
+    Text(post.tag) { size: 11; color: "#6d5dfc"; bg: "rgba(109,93,252,.12)"; pad: (2, 8); radius: 10; marginBottom: 8; width: hug; }
+    Text(post.title) { class: "posttitle"; size: 15; weight: bold; cramped: [ellipsis]; width: fill; display: "block"; marginBottom: 6; }
+    Text(post.excerpt) { size: 13; color: subColor; cramped: [ellipsis]; width: fill; display: "block"; marginBottom: 10; }
+    likeBtn = Button("") {
+      class: "likebtn"; border: "none"; bg: "transparent"; cursor: pointer; color: "#ff6bcb";
+      display: "flex"; alignItems: "center"; width: hug; gap: 4; padding: "0";
+      Text("♥ ${likes}") { class: "likecount"; size: 14; }
+    }
+    when(likeBtn) { likes = likes + 1; }
+  }
+}
+
+// 分类按钮:手拼 event+on+when(同 named_signal_child 的 Button 分支手写版),换来固定短列表可以横排。
+number buildCatButton(string c) {
+  number btn = create("button");
+  setText(btn, c);
+  setAttr(btn, "class", "catbtn");
+  setStyle(btn, "padding", "7px 14px"); setStyle(btn, "border-radius", "20px");
+  setStyle(btn, "font-size", "13px"); setStyle(btn, "cursor", "pointer");
+  event<group> clickEvt;
+  on(btn, "click", clickEvt);
+  when(clickEvt) { category = c; }
+  catBg := if (c == category) { "#6d5dfc" } else { cardColor };
+  changed(catBg) { setStyle(btn, "background", catBg); }
+  setStyle(btn, "background", catBg);
+  catFg := if (c == category) { "white" } else { subColor };
+  changed(catFg) { setStyle(btn, "color", catFg); }
+  setStyle(btn, "color", catFg);
+  // 边框对照参照版 .catbtn:选中=主色描边、未选=浅灰描边(此前 border:none,少了药丸轮廓)。
+  catBorder := if (c == category) { "1px solid #6d5dfc" } else { "1px solid " + lineColor };
+  changed(catBorder) { setStyle(btn, "border", catBorder); }
+  setStyle(btn, "border", catBorder);
+  return btn;
+}
+
+container PostsSection() {
+  pad: (36, 0);
+  WrapCol {
+    pad: (0, 20);
+    Text("文章") { size: 20; weight: bold; marginBottom: 18; }
+    Row {
+      gap: 10; marginBottom: 18; flexWrap: "wrap"; align: center;
+      Row {
+        width: fill; align: center; gap: 8; pad: (9, 14); radius: 10; border: "1.5px solid " + lineColor; bg: cardColor; minWidth: "180px";
+        append(self, iconSearchSmall(subColor));
+        searchIn = Input() { id: "searchInput"; placeholder: "搜索文章标题或摘要…"; border: "none"; outline: "none"; width: fill; bg: "transparent"; color: fgColor; }
+        when(searchIn) with(string s) { searchQuery = s; }
+      }
+      Row {
+        // 分类固定 6 个、永不增删/排序,不需要 each() 的可回收列表机制——直接手拼(create/on/event/when 都是已证
+        // 原语),顺带绕开一个新发现的小坑:each() 自动生成的挂载 div 没有暴露样式钩子,分类这种"整组要横排"的
+        // 短列表若硬用 each() 会让 6 个按钮在默认块级挂载 div 里纵向堆叠(而非跟随外层 flex 横排)。
+        gap: 8; flexWrap: "wrap";
+        append(self, buildCatButton("全部"));
+        append(self, buildCatButton("语言设计"));
+        append(self, buildCatButton("工程实践"));
+        append(self, buildCatButton("性能"));
+        append(self, buildCatButton("架构"));
+        append(self, buildCatButton("随笔"));
+      }
+    }
+    Text("找到 ${found} 篇文章") { id: "foundLabel"; color: subColor; size: 13; marginBottom: 14; }
+    // 网格直接写在容器上,each() 的文章卡自动铺进来——挂载 div 现在默认 display:contents 透传,
+    // 不用再 query 抓那层 div、也不用把网格设在它身上(旧写法已废,透传后一行就够)。
+    Box {
+      id: "postGrid"; width: fill;
+      display: "grid"; gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))"; gap: 18;
+      each(visiblePosts) key(post.id) with(post) { PostCard(post) }
+    }
+  }
+}
+
+container ContactSection() {
+  pad: (36, 0, 60, 0);
+  WrapCol {
+   pad: (0, 20);
+   Text("联系我") { size: 20; weight: bold; marginBottom: 18; }
+   Column {
+    id: "contactForm"; bg: cardColor; border: "1px solid " + lineColor; radius: 14; pad: 22; width: "460px"; maxWidth: "100%";
+    // width:fill(=表单卡里 100% 宽)配框架 border-box 默认,内边距不撑出卡片——不用再逐个手写 boxSizing。
+    nameIn = Input() { id: "fName"; placeholder: "你的名字"; width: fill; pad: (9, 12); radius: 8; border: "1.5px solid " + lineColor; marginBottom: 12; bg: bgColor; color: fgColor; }
+    when(nameIn) with(string s) { cName = s; }
+    emailIn = Input() { id: "fEmail"; placeholder: "邮箱"; width: fill; pad: (9, 12); radius: 8; border: "1.5px solid " + lineColor; marginBottom: 12; bg: bgColor; color: fgColor; }
+    when(emailIn) with(string s) { cEmail = s; }
+    Select(topics) { id: "fTopic"; width: fill; pad: (9, 12); radius: 8; border: "1.5px solid " + lineColor; marginBottom: 12; bg: bgColor; color: fgColor; }
+    msgIn = Textarea() { id: "fMsg"; placeholder: "想说点什么…"; width: fill; pad: (9, 12); radius: 8; border: "1.5px solid " + lineColor; marginBottom: 12; bg: bgColor; color: fgColor; }
+    when(msgIn) with(string s) { cMsg = s; }
+    Row {
+      align: center; gap: 8; marginBottom: 12; color: subColor; size: 13;
+      agreeChk = Checkbox() { id: "fAgree"; }
+      when(agreeChk) with(string s) { cAgree = s; }
+      Text("我同意以上信息被用于回复我的留言")
+    }
+    if (!cValid) {
+      Text("请填写姓名、有效邮箱(含 @)、留言内容,并勾选同意") { id: "fHint"; color: "#c0392b"; size: 12; marginBottom: 8; }
+    }
+    // width:hug 让按钮收缩到内容(参照版是紧凑小按钮,不被 flex 列拉成整幅);opacity 用 if 表达式反应式跟随
+    // cValid 做"禁用变暗"——WhenScript 没有 :disabled 伪类,禁用态的视觉降级靠反应式 opacity 显式表达。
+    submitBtn = Button("提交留言") { id: "fSubmit"; width: hug; pad: (9, 20); radius: 8; border: "none"; bg: linear("90deg", "#6d5dfc", "#46c2ff"); color: "white"; weight: 600; cursor: pointer; disabled: !cValid; opacity: if (cValid) { 1 } else { 0.45 }; }
+    when(submitBtn) { cSubmitted = true; }
+    if (cSubmitted) {
+      Text("✅ 已收到,谢谢留言!") { id: "fSuccess"; color: "#2e7d32"; size: 13; marginTop: 8; }
+    }
+   }
+  }
+}
+
+container Footer() {
+  bg: cardColor; borderTop: "1px solid " + lineColor;
+  number wave = buildWaveDivider();
+  append(self, wave);
+  WrapCol {
+    align: center; pad: (18, 20, 26, 20); color: subColor; size: 12;
+    Row {
+      gap: 10; marginBottom: 10;
+      append(self, iconChip(iconCode("#1c1e26")));
+      append(self, iconChip(iconChat("#1c1e26")));
+      append(self, iconChip(iconMail("#1c1e26")));
+    }
+    Text("© 2026 Max —— WhenScript 前端语法版(对照版见 blog-reference.html)")
+  }
+}
+
+container App() {
+  fontFamily: "system-ui, -apple-system, sans-serif"; bg: bgColor; color: fgColor;
+  number defs = buildSharedDefs();
+  append(self, defs);
+  NavBar()
+  Hero()
+  SkillsSection()
+  PostsSection()
+  ContactSection()
+  Footer()
+}
+
+setStyle(query("body"), "margin", "0");
+setStyle(query("body"), "padding", "0");
+App();

@@ -1,0 +1,32 @@
+// 感知信号验证 —— 自适应网格:cols 随容器宽度反应式变化(拖拽窗口看列数自动变)。
+// 证明:host(ResizeObserver)→ write_field(self.width) → `:=` 派生 → grid 列数 + Text 全自动跟随。
+// 注意:container 名别用 `Grid`(跟内置 layout 容器 `Grid` 冲突,会被当内置糖而非调工厂),用 ResponsiveGrid。
+import { Text, Button } from "dom";
+
+group items = [];
+number n = 0;
+
+container ResponsiveGrid() {
+  display: "grid"; gap: "8px"; padding: "16px";
+  background: "#f0f4ff"; borderRadius: "12px"; margin: "16px 0"; minHeight: "60px";
+  // ★感知信号★:cols 随 self.width 反应式变(>500→4 列,>300→3 列,否则 2 列)—— 替代媒体查询
+  cols := if (self.width > 500) { 4 } else { if (self.width > 300) { 3 } else { 2 } };
+  changed(cols) { setStyle(self, "grid-template-columns", "repeat(" + cols + ", 1fr)"); }
+  setStyle(self, "grid-template-columns", "repeat(2, 1fr)");
+  Text("宽 ${self.width}px → ${cols} 列") { id: "label"; color: "#3a55d8"; fontWeight: "600"; padding: "4px" }
+  each(items) with(it) {
+    padding: "12px"; background: "white"; borderRadius: "8px";
+    textAlign: "center"; fontWeight: "600"; color: "#3a55d8";
+    Text("${it}")
+  }
+}
+
+container App() {
+  fontFamily: "system-ui, sans-serif"; maxWidth: "640px"; margin: "20px auto"; padding: "0 16px";
+  Text("感知信号 · 自适应网格") { fontSize: "20px"; fontWeight: "700" }
+  Text("拖拽浏览器窗口宽度 → 网格列数自动在 2/3/4 间切换") { color: "#666"; fontSize: "13px"; margin: "6px 0" }
+  addBtn = Button("加一项") { border: "none"; borderRadius: "8px"; padding: "8px 16px"; background: "#3a55d8"; color: "white"; cursor: "pointer"; margin: "8px 0" }
+  when(addBtn) { items[n] = "项 " + n; n = n + 1; }
+  ResponsiveGrid()
+}
+App();

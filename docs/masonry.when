@@ -1,0 +1,77 @@
+// L2 一等自定义容器演示:瀑布流(Masonry)—— flex/grid 都做不好的"按每张卡片的【实测高度】把它放进当前最短的列"。
+// 骨灰级用户完全自己排版:create/setStyle/append 造卡片 + measure(card) 拿到反应式实测高度 + 自己算列位置。
+// 这就是"给足自定义容器设计能力":父容器提供空间和约束(列宽/列数),子卡片报出自己的真实尺寸,父来协商定位。
+import { create, setStyle, setText, append, measure } from "dom";
+
+group items = [
+  { t: "短卡片", b: "就一行。" },
+  { t: "中等卡片", b: "两三行的内容,占的高度多一点,masonry 要按真实高度排。" },
+  { t: "很高的卡片", b: "这张特别长,内容很多很多,会明显比别的高,masonry 应该把后面的卡片错开塞到更短的那一列去,而不是像 grid 那样对齐成僵硬的行。再加一点。再加一点。收尾。" },
+  { t: "短", b: "一行。" },
+  { t: "中", b: "两行内容占位占位占位占位。" },
+  { t: "高一些", b: "比短的高,比最高的矮,masonry 会自己找最短列。补一行内容。" },
+  { t: "短卡", b: "结束。" },
+  { t: "中等", b: "内容两行占一点高度看看效果。" },
+  { t: "收尾卡", b: "最后一张,补齐布局。" }
+];
+
+number COLS = 3;
+number COLW = 190;
+number GAP = 14;
+group cards = {};   // 序号 -> 卡片元素
+group meas = {};    // 序号 -> measure(卡片) 返回的反应式尺寸 group(.height 会被实测填充)
+number nCards = 0;
+
+// 按实测高度把每张卡片放进"当前最短的列"。纯读当前值 + 设 style,由下面的 changed 触发重排。
+void doLayout() {
+  group colH = {};
+  number c = 0;
+  while (c < COLS) { colH[c] = 0; c = c + 1; }
+  number i = 0;
+  while (i < nCards) {
+    number best = 0;
+    number bestH = colH[0];
+    number k = 1;
+    while (k < COLS) {
+      if (colH[k] < bestH) { bestH = colH[k]; best = k; }
+      k = k + 1;
+    }
+    number card = cards[i];
+    setStyle(card, "left", "" + (best * (COLW + GAP)) + "px");
+    setStyle(card, "top", "" + colH[best] + "px");
+    colH[best] = colH[best] + meas[i].height + GAP;
+    i = i + 1;
+  }
+}
+
+container Masonry() {
+  position: "relative"; width: "" + (COLS * COLW + (COLS - 1) * GAP) + "px"; height: "560px"; margin: "0 auto";
+  each(items) with(item) {
+    number card = create("div");
+    setStyle(card, "position", "absolute");
+    setStyle(card, "width", "" + COLW + "px");
+    setStyle(card, "padding", "12px 14px");
+    setStyle(card, "border-radius", "12px");
+    setStyle(card, "background", "hsl(" + (nCards * 40) + ", 72%, 92%)");
+    setStyle(card, "box-shadow", "0 4px 12px rgba(0,0,0,.08)");
+    // 不用再手写 transition —— ws-base 默认就过渡 top/left,瀑布流的"分发"动画天然带上
+    number title = create("div");
+    setText(title, item.t);
+    setStyle(title, "font-weight", "700"); setStyle(title, "margin-bottom", "6px");
+    append(card, title);
+    number body = create("div");
+    setText(body, item.b);
+    setStyle(body, "color", "#555"); setStyle(body, "font-size", "13px"); setStyle(body, "line-height", "1.5");
+    append(card, body);
+    append(self, card);
+    cards[nCards] = card;
+    meas[nCards] = measure(card);   // 反应式实测:card 渲染后 ResizeObserver 把真实高度写进 meas[nCards].height
+    nCards = nCards + 1;
+  }
+  // 任一卡片的实测高度到位/变化 → 重排(measure 驱动的反应式布局,这是 flex/grid 给不了的自定义协商)
+  each(meas) with(m) {
+    changed(m.height) { doLayout(); }
+  }
+}
+
+Masonry();
