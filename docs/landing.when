@@ -1,0 +1,323 @@
+// ══════════════════════════════════════════════════════════════════════════════
+//  WhenScript 官网首页 —— 用 WhenScript 自己写的。
+//
+//  这不是「一个展示 when 的页面」,这个页面【就是】 when:整份首页由 wasm 引擎在你的
+//  浏览器里实时执行。HTML 版(index.html)的活演示是嵌一个 iframe 跑 wasm;这一版没有
+//  iframe —— 首屏那块 count 演示,是这个页面【自己的反应式】:count 变,依赖它的一切自己动。
+//  首页不是在「表演」 when,首页就是 when。
+//
+//  写法全部来自现有 .when 范例(blog.when / hero.when):container 容器语法 + 语义键 +
+//  create/setAttr/setStyle/append 手拼(导航锚点、品牌 logo、方波分割线全是真实 DOM/SVG)。
+//  设计 token 与 index.html 完全同源(见下方色板)。
+// ══════════════════════════════════════════════════════════════════════════════
+import { create, setAttr, setStyle, setText, append, query, Text, Button } from "dom";
+
+// ── 设计 token(与 index.html 的 :root 变量逐值一致)──────────────────────────
+string cBg     = "#1e1b2e";   // --bg
+string cBgDeep = "#171426";   // --bg-deep
+string cPanel  = "#26213c";   // --panel
+string cLine   = "#3b3358";   // --line
+string cText   = "#ece8f8";   // --text
+string cDim    = "#a89fc8";   // --dim
+string cSignal = "#ffb454";   // --signal 琥珀
+string cTrace  = "#6fd9e7";   // --trace  青
+string cArrow  = "#ff5fa2";   // --arrow  粉
+string cOk     = "#89ca78";   // --ok
+string fMono   = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+string fSans   = "system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+
+// ── 首屏活演示的状态(整个页面共享的 module 级反应式变量)──────────────────────
+// 这四行就是首屏那块演示的全部大脑:count 是唯一的「写入点」,其余都自动跟随。
+number count = 0;
+number double := count * 2;                                          // 派生:count 一变它就变
+string liveColor := if (count > 4) { cSignal } else { cTrace };      // 条件色:过阈值转琥珀
+string liveMood  := if (count > 4) {
+  "🔥 信号拉满 —— 依赖 count 的一切都跟着动了"
+} else {
+  "点下面的按钮:写入 count,看依赖它的值自己流动"
+};
+
+// ── 手拼 DOM 原语:导航锚点(现有 .when 没人写过真 <a>,这里用 create/setAttr 拼)──────
+number navLink(string label, string href) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  setStyle(a, "color", cDim);
+  setStyle(a, "font-size", "14px");
+  setStyle(a, "font-weight", "500");
+  setStyle(a, "text-decoration", "none");
+  setStyle(a, "padding", "4px 2px");
+  return a;
+}
+
+// CTA 按钮 = 真锚点(能跳转到别的页面),primary=琥珀实心,否则描边幽灵按钮。
+number ctaLink(string label, string href, bool primary) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  setStyle(a, "display", "inline-block");
+  setStyle(a, "padding", "12px 22px");
+  setStyle(a, "border-radius", "10px");
+  setStyle(a, "font-size", "15px");
+  setStyle(a, "font-weight", "600");
+  setStyle(a, "text-decoration", "none");
+  if (primary) {
+    setStyle(a, "background", cSignal);
+    setStyle(a, "color", "#241c0a");
+    setStyle(a, "border", "1px solid " + cSignal);
+  } else {
+    setStyle(a, "background", "transparent");
+    setStyle(a, "color", cText);
+    setStyle(a, "border", "1px solid " + cLine);
+  }
+  return a;
+}
+
+// 品牌 logo:一个方波(step waveform)—— 与 index.html nav 里的 SVG 逐点一致,真实 <svg>。
+number brandMark() {
+  number svg = create("svg");
+  setAttr(svg, "width", "26"); setAttr(svg, "height", "26"); setAttr(svg, "viewBox", "0 0 26 26");
+  number rect = create("rect");
+  setAttr(rect, "width", "26"); setAttr(rect, "height", "26"); setAttr(rect, "rx", "6"); setAttr(rect, "fill", cBgDeep);
+  append(svg, rect);
+  number path = create("path");
+  setAttr(path, "d", "M4 17 H8 V9 H13 V17 H18 V9 H22");
+  setAttr(path, "fill", "none"); setAttr(path, "stroke", cSignal);
+  setAttr(path, "stroke-width", "2"); setAttr(path, "stroke-linecap", "round"); setAttr(path, "stroke-linejoin", "round");
+  append(svg, path);
+  return svg;
+}
+
+// 方波分割线:一道横贯的信号方波(呼应「一切皆信号」),真实 <svg> path。
+number waveDivider() {
+  number svg = create("svg");
+  setAttr(svg, "viewBox", "0 0 1200 24"); setAttr(svg, "preserveAspectRatio", "none");
+  setStyle(svg, "display", "block"); setStyle(svg, "width", "100%"); setStyle(svg, "height", "24px"); setStyle(svg, "opacity", "0.5");
+  number path = create("path");
+  setAttr(path, "d", "M0 18 H60 V6 H120 V18 H180 V6 H240 V18 H300 V6 H360 V18 H420 V6 H480 V18 H540 V6 H600 V18 H660 V6 H720 V18 H780 V6 H840 V18 H900 V6 H960 V18 H1020 V6 H1080 V18 H1140 V6 H1200");
+  setAttr(path, "fill", "none"); setAttr(path, "stroke", cSignal); setAttr(path, "stroke-width", "1.5");
+  append(svg, path);
+  return svg;
+}
+
+// 代码行:一行等宽、保留缩进的代码(white-space:pre)。col 决定这一行的颜色(注释=幽,:=行=青)。
+number codeLine(string txt, string col) {
+  number d = create("div");
+  setText(d, txt);
+  setStyle(d, "font-family", fMono);
+  setStyle(d, "font-size", "12.5px");
+  setStyle(d, "line-height", "1.75");
+  setStyle(d, "color", col);
+  setStyle(d, "white-space", "pre");
+  return d;
+}
+
+// ── 居中内容列(对照 index.html 的 .wrap:max-width:1080px; margin:0 auto)────────
+container WrapRow() extends Row {
+  width: fill; maxWidth: "1080px"; margin: "0 auto"; alignItems: "center";
+}
+container WrapCol() extends Column {
+  width: fill; maxWidth: "1080px"; margin: "0 auto";
+}
+
+// ── 顶部导航 ─────────────────────────────────────────────────────────────────
+container NavBar() {
+  bg: cBg; borderBottom: "1px solid " + cLine; position: "sticky"; top: 0; zIndex: "20"; backdropFilter: "blur(10px)";
+  WrapRow {
+    gap: 22; pad: (0, 24); height: 58;
+    Row {
+      gap: 10; alignItems: "center";
+      append(self, brandMark());
+      Text("WhenScript") { weight: 700; size: 17; color: cText; }
+    }
+    Row {
+      marginLeft: "auto"; gap: 18; alignItems: "center"; flexWrap: "wrap";
+      append(self, navLink("Playground", "./playground.html"));
+      append(self, navLink("示例", "./examples.html"));
+      append(self, navLink("文档", "./docs.html"));
+      append(self, navLink("联系", "./contact.html"));
+    }
+  }
+}
+
+// ── 首屏活演示卡(签名元素:整块就是页面原生的反应式,不是 iframe)───────────────
+container LiveCard() extends Column {
+  width: "440px"; maxWidth: "100%"; bg: cBgDeep; border: "1px solid " + cLine; radius: 14;
+  overflow: "hidden"; shadow: "0 24px 60px rgba(0,0,0,.35)";
+
+  // 卡头:脉动的信号点 + 「LIVE」标
+  Row {
+    alignItems: "center"; gap: 8; pad: (10, 14); borderBottom: "1px solid " + cLine;
+    Box { width: 8; height: 8; radius: 999; bg: cSignal; pulse: "1.6s"; }
+    Text("LIVE · 这块界面就是 WhenScript 本身") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; }
+  }
+
+  // 源码片段:下面这段跑着的演示,「大脑」就这四行 —— 与 hero.when 同构。
+  Column {
+    pad: (14, 16); gap: 2; borderBottom: "1px solid " + cLine;
+    append(self, codeLine("number count  = 0;", cText));
+    append(self, codeLine("number double := count * 2;", cTrace));
+    append(self, codeLine("string mood := if (count > 4) { ... };", cTrace));
+    append(self, codeLine("when(add) { count = count + 1; }", cText));
+  }
+
+  // 活舞台:真正在跑的部件 —— count/double/mood 全反应式,+1 按钮就地写入 count。
+  Column {
+    pad: 22; alignItems: "center"; gap: 8;
+    Text("count = ${count}") { size: 34; weight: 800; color: liveColor; font: fMono; }
+    Text("double := ${double}") { size: 16; color: cTrace; font: fMono; }
+    Text("${liveMood}") { size: 13; color: cDim; marginTop: 4; align: center; }
+    add = Button("写入 count = count + 1") {
+      marginTop: 10; pad: (10, 20); size: 15; weight: 700; cursor: pointer;
+      bg: cSignal; color: "#241c0a"; border: "none"; radius: 10;
+    }
+    when(add) { count = count + 1; }
+  }
+
+  Text("↑ 这段不在 iframe 里 —— 就是这个页面自己的反应式。count 一变,依赖它的一切自动更新。") {
+    pad: (9, 14); font: fMono; size: 11; color: cDim; align: center; borderTop: "1px solid " + cLine; lineHeight: "1.6";
+  }
+}
+
+container Hero() {
+  bg: cBg; pad: (72, 0, 56, 0);
+  WrapRow {
+    pad: (0, 24); gap: 48; alignItems: "center"; flexWrap: "wrap";
+    Column {
+      width: fill; minWidth: "300px";
+      Text("event-driven · strongly-typed · reactive") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 20; }
+      Text("写入,即触发。") { size: 56; weight: 900; color: cText; lineHeight: "1.15"; marginBottom: 10; }
+      Text("WhenScript 是一门事件驱动的强类型反应式语言。没有轮询、没有手动订阅、没有虚拟 DOM —— 值一变,依赖它的一切自己动,像电流过电路。为人类与 AI 而生。") {
+        size: 17; color: cDim; maxWidth: "32em"; marginBottom: 30; lineHeight: "1.7";
+      }
+      Row {
+        gap: 14; flexWrap: "wrap";
+        append(self, ctaLink("▶ 在 Playground 试玩", "./playground.html", true));
+        append(self, ctaLink("看示例画廊", "./examples.html", false));
+      }
+    }
+    LiveCard()
+  }
+}
+
+// ── 哲学三点(示波器三通道)──────────────────────────────────────────────────
+container PhilCard(string tag, string title, string body) extends Column {
+  bg: cPanel; border: "1px solid " + cLine; radius: 12; pad: (24, 22);
+  Text(tag) { font: fMono; size: 11; color: cSignal; letterSpacing: "0.14em"; border: "1px solid " + cLine; radius: 999; pad: (5, 10); marginBottom: 16; width: hug; bg: cBgDeep; }
+  Text(title) { size: 18; weight: bold; color: cText; marginBottom: 8; }
+  Text(body) { size: 14; color: cDim; lineHeight: "1.7"; }
+}
+
+container Philosophy() {
+  bg: cBg; pad: (64, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("philosophy · 三条信号") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 10; }
+    Text("不是框架给你的反应式,是语言本身的语义。") { size: 30; weight: 800; color: cText; marginBottom: 36; lineHeight: "1.3"; }
+    Box {
+      display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))"; gap: 18;
+      PhilCard("CH1 · 事件", "一切皆事件", "赋值是事件,点击是事件,定时器到点是事件。event<T> 是一等值:可传递、可跨模块共享委托。引擎里没有一行轮询。")
+      PhilCard("CH2 · 电路", "组合逻辑电路模型", "派生值用 := 持续绑定,像门电路接线。每次写入先让所有派生 settle 到不动点,再触发 when —— 读到的永远是一致的世界(glitch-free)。")
+      PhilCard("CH3 · 并发", "透明并发", "写代码像单线程,引擎自动并行执行读写集不冲突的反应,结果与串行完全一致 —— 多核加速是实测过的,不是白皮书里的。")
+    }
+  }
+}
+
+// ── := 专题(= vs := 对比 + 边界说明)─────────────────────────────────────────
+container OpChip(string code, string note, string codeColor) extends Column {
+  pad: (9, 14); radius: 8; border: "1px solid " + cLine; bg: cBgDeep; width: hug;
+  Text(code) { font: fMono; size: 15; weight: 600; color: codeColor; }
+  Text(note) { size: 11; color: cDim; marginTop: 6; }
+}
+
+container ReactiveOp() {
+  bg: cBgDeep; pad: (64, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text(":= · 持续绑定") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 10; }
+    Text("数学学生等了很久的那个操作符") { size: 30; weight: 800; color: cText; marginBottom: 14; lineHeight: "1.3"; }
+    Text("= 是「此刻拷贝一个值」;:= 是「永远等于这个表达式」。像在草稿纸上写公式那样声明变量之间的关系,然后让值自己流动 —— 你只写关系,引擎负责让它一直成立。") {
+      size: 15; color: cDim; maxWidth: "46em"; marginBottom: 28; lineHeight: "1.7";
+    }
+
+    Row {
+      gap: 14; flexWrap: "wrap"; marginBottom: 24;
+      OpChip("x = 5", "赋值:此刻拷一份,之后各走各的", cDim)
+      OpChip("area := 3.14 * r * r", "绑定:永远等于这个表达式,r 一变 area 就跟着变", cArrow)
+    }
+
+    Box {
+      display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))"; gap: 18; marginBottom: 22;
+
+      // 手动流水线:每改一处,得记得同步派生值、通知所有人。
+      Column {
+        bg: cBg; border: "1px solid " + cLine; radius: 12; overflow: "hidden";
+        Text("= · 手动流水线") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; pad: (10, 16); borderBottom: "1px solid " + cLine; }
+        Column {
+          pad: 16; gap: 1;
+          append(self, codeLine("number count  = 0;", cText));
+          append(self, codeLine("number double = 0;", cText));
+          append(self, codeLine("", cDim));
+          append(self, codeLine("count  = count + 1;", cText));
+          append(self, codeLine("double = count * 2;   // 别忘了同步", cDim));
+          append(self, codeLine("notifyEveryone();     // 别忘了通知", cDim));
+        }
+      }
+
+      // 写入即触发:只写关系,值自己流动。
+      Column {
+        bg: cBg; border: "1px solid " + cLine; radius: 12; overflow: "hidden";
+        Text("WHENSCRIPT · := 写入即触发") { font: fMono; size: 11; color: cSignal; letterSpacing: "0.12em"; pad: (10, 16); borderBottom: "1px solid " + cLine; }
+        Column {
+          pad: 16; gap: 1;
+          append(self, codeLine("number r     = 5;", cText));
+          append(self, codeLine("number area  := 3.14159 * r * r;", cTrace));
+          append(self, codeLine("number perim := 2 * 3.14159 * r;", cTrace));
+          append(self, codeLine("", cDim));
+          append(self, codeLine("// r = 10 → area、perim 自动重算,", cDim));
+          append(self, codeLine("// 你不用通知任何人。", cDim));
+        }
+      }
+    }
+
+    Column {
+      bg: cPanel; border: "1px solid " + cLine; borderLeft: "3px solid " + cSignal; radius: 12; pad: (20, 24);
+      Text("逆天,但有边界 —— 它是电路,不是魔法") { size: 17; weight: bold; color: cText; marginBottom: 8; }
+      Text("每次写入,引擎先让所有 := 派生值收敛到不动点(glitch-free),再往下走 —— 你读到的永远是一个前后一致的世界,不会出现「半更新」的中间态。") {
+        size: 14; color: cDim; marginBottom: 12; lineHeight: "1.7";
+      }
+      Text("万一你写出循环反馈 a := b + 1; b := a + 1,引擎不会无限转圈:它当场报一个 Reactive cycle,指出哪里短路了。强大是收敛的,不是失控的 —— 这正是把电路模型搬进语言的意义。") {
+        size: 14; color: cDim; lineHeight: "1.7";
+      }
+    }
+  }
+}
+
+// ── 整页 ─────────────────────────────────────────────────────────────────────
+// 注:页脚直接用内建语义容器 `Footer { }`(渲染真 <footer> 语义标签)。
+// 不能自定义 `container Footer()`—— Footer/Header/Nav/Section 等是保留的语义元素名,
+// 自定义同名容器会被内建空 <footer> 悄悄取代(见 dogfood 缺口清单 #14)。
+container App() {
+  font: fSans; bg: cBg; color: cText;
+  NavBar()
+  Hero()
+  append(self, waveDivider());
+  Philosophy()
+  ReactiveOp()
+  Footer {
+    bg: cBg; borderTop: "1px solid " + cLine; pad: (32, 0, 44, 0);
+    WrapRow {
+      pad: (0, 24); gap: 20; flexWrap: "wrap"; alignItems: "center";
+      Text("© 2026 WhenScript · 写入,即触发") { color: cDim; size: 13; }
+      Box { width: fill; minWidth: "20px"; }
+      append(self, navLink("联系我们", "./contact.html"));
+      append(self, navLink("示例画廊", "./examples.html"));
+      append(self, navLink("文档", "./docs.html"));
+    }
+  }
+}
+
+setStyle(query("body"), "margin", "0");
+setStyle(query("body"), "padding", "0");
+setStyle(query("body"), "background", cBg);
+App();

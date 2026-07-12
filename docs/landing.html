@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhenScript — 写入,即触发(when 版首页)</title>
+<meta name="description" content="用 WhenScript 自己写的官网首页:整页由 wasm 引擎在浏览器里实时执行,首屏活演示是页面原生的反应式——count 变,依赖它的一切自己动。">
+<link rel="icon" type="image/png" href="./icon.png">
+<style>
+  /* 壳页面只负责:填底色 + 引擎加载中的过渡态。真正的首页 DOM 全由 landing.when 在运行时生成。 */
+  html, body { margin: 0; padding: 0; }
+  html { min-height: 100%; }
+  body { min-height: 100vh; background: #1e1b2e; color: #ece8f8;
+         font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  #ws-loading {
+    position: fixed; inset: 0; z-index: 999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: #1e1b2e; color: #a89fc8; font-size: 14px; letter-spacing: .04em;
+    transition: opacity .35s ease;
+  }
+  #ws-loading.gone { opacity: 0; pointer-events: none; }
+  #ws-loading svg { display: block; }
+  #ws-loading .err { color: #ff5fa2; max-width: 30em; text-align: center; padding: 0 24px; line-height: 1.6; }
+  @keyframes dash { to { stroke-dashoffset: -48; } }
+  #ws-loading path.flow { stroke-dasharray: 6 6; animation: dash 1s linear infinite; }
+</style>
+</head>
+<body>
+<div id="ws-loading">
+  <svg width="120" height="30" viewBox="0 0 120 30" aria-hidden="true">
+    <path class="flow" d="M2 22 H18 V8 H38 V22 H58 V8 H78 V22 H98 V8 H118"
+          fill="none" stroke="#ffb454" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <div id="ws-loading-text">WhenScript 引擎加载中 · 这份首页就是 when 本身…</div>
+</div>
+
+<script type="module">
+  // 直接把 landing.when boot 进【本页面】—— 不套 iframe。这正是这版首页的核心卖点:
+  // 整页(导航/Hero/活演示/哲学卡/:= 专题/页脚)都是 wasm 引擎实时执行的 WhenScript,
+  // 首屏的 count 演示是页面原生的反应式,不是嵌进来的 iframe。
+  import { boot } from "./host.js";
+
+  const loading = document.getElementById("ws-loading");
+  const setErr = (msg) => {
+    const t = document.getElementById("ws-loading-text");
+    if (t) { t.className = "err"; t.textContent = "启动失败:" + msg; }
+    loading.classList.remove("gone");
+  };
+  window.addEventListener("error", (e) => setErr((e && e.message) || String(e.error || e)));
+
+  (async () => {
+    try {
+      const res = await fetch("./landing.when");
+      if (!res.ok) throw new Error("取不到 landing.when(" + res.status + ")");
+      const source = await res.text();
+      await boot("./whenscript.wasm", source);
+      // 引擎已把整页 DOM 挂到 body,淡出加载层再移除。
+      loading.classList.add("gone");
+      setTimeout(() => loading.remove(), 400);
+    } catch (e) {
+      setErr((e && e.message) ? e.message : String(e));
+    }
+  })();
+</script>
+</body>
+</html>
