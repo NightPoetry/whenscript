@@ -172,6 +172,29 @@
     padding: 12px 14px; font: 13px/1.5 var(--mono); color: var(--ok); overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere;
   }
 
+  /* := 专题 */
+  .op-lead { display: flex; gap: 20px; align-items: baseline; flex-wrap: wrap; margin-bottom: 28px; }
+  .op-chip { flex: 0 0 auto; font: 600 15px/1 var(--mono); padding: 9px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-deep); }
+  .op-chip .eq { color: var(--dim); } .op-chip .bind { color: var(--arrow); }
+  .op-chip small { display: block; margin-top: 6px; font: 11px/1.4 system-ui, sans-serif; color: var(--dim); letter-spacing: 0; }
+  .op-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 22px; align-items: stretch; margin-bottom: 22px; }
+  @media (max-width: 860px) { .op-grid { grid-template-columns: 1fr; } }
+  .op-code { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .op-code .op-label { padding: 9px 14px; font: 11px/1 var(--mono); letter-spacing: .12em; color: var(--dim); border-bottom: 1px solid var(--line); }
+  .op-code pre { margin: 0; padding: 16px; overflow-x: auto; flex: 1; font: 13px/1.7 var(--mono); tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .op-flow { background: linear-gradient(160deg, var(--panel), var(--bg-deep)); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+  .op-flow svg { width: 100%; height: auto; display: block; }
+  .op-flow .flow-note { font-size: 13px; line-height: 1.6; color: var(--dim); text-align: center; }
+  .op-flow .flow-note strong { color: var(--signal); font-weight: 600; }
+  .op-flow .flow-note .t { color: var(--trace); }
+  .flow-line { stroke: var(--signal); stroke-width: 2; fill: none; stroke-dasharray: 5 6; animation: flowdash 1.1s linear infinite; }
+  @keyframes flowdash { to { stroke-dashoffset: -22; } }
+  .op-bound { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--signal); border-radius: 12px; padding: 20px 24px; }
+  .op-bound h3 { margin: 0 0 8px; font-size: 17px; }
+  .op-bound p { margin: 0 0 12px; font-size: 14px; color: var(--dim); }
+  .op-bound p:last-child { margin: 0; }
+  .op-bound code { font: .92em var(--mono); color: var(--trace); background: var(--bg-deep); padding: 1px 6px; border-radius: 5px; }
+
   footer {
     border-top: 1px solid var(--line); padding: 32px 0 44px; margin-top: 30px;
     color: var(--dim); font-size: 13px;
@@ -180,7 +203,7 @@
   footer .spacer { flex: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    .wave-divider rect, .live-dot.on { animation: none; }
+    .wave-divider rect, .live-dot.on, .flow-line { animation: none; }
     html { scroll-behavior: auto; }
   }
 </style>
@@ -199,7 +222,7 @@
     <div class="links">
       <a href="./playground.html">Playground</a>
       <a href="./examples.html">示例</a>
-      <a href="./docs.html">语法速览</a>
+      <a href="./docs.html">文档</a>
       <a href="./contact.html">联系</a>
       <a class="cta" href="https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript" target="_blank" rel="noopener">VS Code 扩展</a>
       <a href="https://github.com/NightPoetry/whenscript" target="_blank" rel="noopener">GitHub</a>
@@ -258,6 +281,54 @@
         <h3>透明并发</h3>
         <p>写代码像单线程,引擎自动并行执行读写集不冲突的反应,结果与串行完全一致——多核加速是实测过的,不是白皮书里的。</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<section id="reactive-op">
+  <div class="wrap">
+    <div class="sec-eyebrow">:= · 持续绑定</div>
+    <h2>数学学生等了很久的那个操作符</h2>
+    <p class="sec-sub"><code>=</code> 是「此刻拷贝一个值」;<code>:=</code> 是「<strong>永远等于</strong>这个表达式」。像在草稿纸上写公式那样声明变量之间的关系,然后让值自己流动——你只写关系,引擎负责让它一直成立。</p>
+
+    <div class="op-lead">
+      <div class="op-chip"><span class="eq">x = 5</span><small>赋值:此刻拷一份,之后各走各的</small></div>
+      <div class="op-chip"><span class="bind">x := a + b</span><small>绑定:永远等于 a+b,a 或 b 一变 x 就跟着变</small></div>
+    </div>
+
+    <div class="op-grid">
+      <div class="op-code">
+        <div class="op-label">半径一变,面积和周长自己重算</div>
+<pre><code><span class="tok-keyword">number</span> r      = <span class="tok-number">5</span>;
+<span class="tok-keyword">number</span> area  <span class="tok-arrow">:=</span> <span class="tok-number">3.14159</span> * r * r;      <span class="tok-comment">// 圆面积</span>
+<span class="tok-keyword">number</span> perim <span class="tok-arrow">:=</span> <span class="tok-number">2</span> * <span class="tok-number">3.14159</span> * r;   <span class="tok-comment">// 周长</span>
+<span class="tok-comment">// r = 10 → area、perim 自动都变,你不用通知任何人</span>
+
+<span class="tok-comment">// 抛体运动:时间 t 一动,高度就重算</span>
+<span class="tok-keyword">number</span> v0 = <span class="tok-number">20</span>;
+<span class="tok-keyword">number</span> t  = <span class="tok-number">0</span>;
+<span class="tok-keyword">number</span> height <span class="tok-arrow">:=</span> v0 * t - <span class="tok-number">4.9</span> * t * t;   <span class="tok-comment">// g/2 = 4.9</span></code></pre>
+      </div>
+      <div class="op-flow">
+        <svg viewBox="0 0 300 150" role="img" aria-label="半径 r 变化,自动驱动 area 和 perim 重新计算">
+          <circle cx="46" cy="75" r="27" fill="none" stroke="var(--signal)" stroke-width="2"/>
+          <text x="46" y="72" text-anchor="middle" fill="var(--signal)" font-size="16" font-weight="700" font-family="ui-monospace, monospace">r</text>
+          <text x="46" y="90" text-anchor="middle" fill="var(--dim)" font-size="10" font-family="ui-monospace, monospace">= 5</text>
+          <path class="flow-line" d="M76 66 Q150 38 222 44"/>
+          <path class="flow-line" d="M76 84 Q150 112 222 108"/>
+          <rect x="222" y="28" width="70" height="34" rx="8" fill="none" stroke="var(--trace)" stroke-width="2"/>
+          <text x="257" y="49" text-anchor="middle" fill="var(--trace)" font-size="13" font-weight="600" font-family="ui-monospace, monospace">area</text>
+          <rect x="222" y="92" width="70" height="34" rx="8" fill="none" stroke="var(--trace)" stroke-width="2"/>
+          <text x="257" y="113" text-anchor="middle" fill="var(--trace)" font-size="12" font-weight="600" font-family="ui-monospace, monospace">perim</text>
+        </svg>
+        <div class="flow-note">改一个 <strong>r</strong>,下游 <span class="t">area</span> / <span class="t">perim</span> 全部自动重算——<br>不用调用、不用订阅、不用记得刷新。</div>
+      </div>
+    </div>
+
+    <div class="op-bound">
+      <h3>逆天,但有边界——它是电路,不是魔法</h3>
+      <p>每次写入,引擎先让所有 <code>:=</code> 派生值收敛到不动点(glitch-free),再往下走,你读到的永远是一个前后一致的世界——不会出现"半更新"的中间态。</p>
+      <p>万一你写出循环反馈 <code>a := b + 1; b := a + 1</code>,引擎<strong style="color:var(--signal)">不会</strong>无限转圈:它当场报一个 <code>Reactive cycle</code>,指出哪里短路了。强大是收敛的,不是失控的——这正是把电路模型搬进语言的意义。</p>
     </div>
   </div>
 </section>

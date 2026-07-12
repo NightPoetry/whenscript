@@ -101,16 +101,20 @@
     background: var(--gutter-bg); border-right: 1px solid var(--border);
     white-space: pre; user-select: none;
   }
+  pre.gutter .gnum { display: block; min-height: 1.55em; }   /* 每行号一块,高度由 JS 同步到对应代码行 */
   .editor-scroll { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
   .editor-scroll pre, .editor-scroll textarea {
     position: absolute; inset: 0; margin: 0; border: none;
     width: 100%; height: 100%;
-    padding: 14px 16px; white-space: pre; word-wrap: normal;
+    /* 代码自动换行(长行不再横向截断);highlight 和 textarea 同宽同字体 → 换行位置一致、视觉重合 */
+    padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    scrollbar-gutter: stable;
   }
   pre#highlight {
     overflow: hidden; color: var(--text); background: transparent; pointer-events: none;
   }
   pre#highlight code { white-space: inherit; font: inherit; }
+  .hl-line { display: block; min-height: 1.55em; }           /* 每逻辑行一块,可测高度对齐行号 */
   textarea#code {
     overflow: auto; resize: none;
     background: transparent; color: transparent; caret-color: var(--accent);
@@ -289,20 +293,32 @@
     return out;
   }
 
-  // ── 行号栏:按当前行数重生成,宽度随位数自适应 ─────────────────────────────
-  function renderGutter(text) {
-    const n = text.split("\n").length;
+  // ── 行号栏:逐行号块,宽度随位数自适应(高度由 syncGutterHeights 对齐) ──────
+  function renderGutter(n) {
     let s = "";
-    for (let i = 1; i <= n; i++) s += i + (i < n ? "\n" : "");
-    gutterEl.textContent = s;
+    for (let i = 1; i <= n; i++) s += '<span class="gnum">' + i + "</span>";
+    gutterEl.innerHTML = s;
     gutterEl.style.width = (Math.max(2, String(n).length) * 8 + 24) + "px";
   }
 
+  // 每逻辑行包一个 .hl-line 块 → 换行时可测各行高度,把行号块撑到同高 = 换行也对齐
   function renderHighlight() {
-    const text = codeEl.value;
-    highlightCodeEl.innerHTML = highlightCode(text);
-    renderGutter(text);
+    const lines = codeEl.value.split("\n");
+    highlightCodeEl.innerHTML = lines
+      .map((l) => '<span class="hl-line">' + (highlightCode(l) || "​") + "</span>")
+      .join("");
+    renderGutter(lines.length);
+    syncGutterHeights();
   }
+
+  // 行号块高度 = 对应代码行的实际渲染高度(该行换行成几行,行号块就多高)
+  function syncGutterHeights() {
+    const hl = highlightCodeEl.querySelectorAll(".hl-line");
+    const gn = gutterEl.querySelectorAll(".gnum");
+    for (let i = 0; i < gn.length; i++) gn[i].style.height = hl[i] ? hl[i].offsetHeight + "px" : "";
+  }
+  // 编辑器宽度变化(窗口 resize / 折叠面板)→ 换行位置变 → 重新对齐行号
+  window.addEventListener("resize", syncGutterHeights);
 
   // textarea 滚动 → 高亮层 + 行号栏跟随(逐像素同步,顶层是透明的真实输入层)
   function syncScroll() {
