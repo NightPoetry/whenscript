@@ -30,7 +30,10 @@
   };
 
   window.addEventListener("error", (e) => {
-    post("output", { text: "ERROR: " + (e.message || String(e.error || e)), isError: true });
+    const m = e.message || String(e.error || e);
+    // "ResizeObserver loop …" 是浏览器已知的良性警告(尺寸感知一帧没派发完),功能正常,不当错误显示。
+    if (m.indexOf("ResizeObserver loop") >= 0) return;
+    post("output", { text: "ERROR: " + m, isError: true });
   });
   window.addEventListener("unhandledrejection", (e) => {
     const r = e.reason;

@@ -222,18 +222,20 @@ const imports = { env: {
   host_observe:    (id)               => {
     const e = els[id]; if (!e || typeof ResizeObserver === "undefined") return;
     if (e._wsRo) return;                              // 已观察 → 不重复
-    e._wsRo = new ResizeObserver((ents) => {
-      for (const ent of ents) {
-        // border-box 尺寸(含 padding+border)——和框架的 border-box 默认一致,且自定义布局(measure)按它
-        // 定位才不会因 padding 少算而重叠。老浏览器无 borderBoxSize 时回退 contentRect。
-        const bb = ent.borderBoxSize && ent.borderBoxSize[0];
-        const w = Math.round(bb ? bb.inlineSize : ent.contentRect.width);
-        const h = Math.round(bb ? bb.blockSize : ent.contentRect.height);
+    e._wsRo = new ResizeObserver(() => {
+      // rAF 合并 + 延迟:把"尺寸变 → 推回引擎 → 反应式改布局"挪到下一帧执行,不在 ResizeObserver
+      // 回调的同步栈里改 DOM——否则同步改布局会立刻触发下一轮观察,浏览器一帧没派发完就报
+      // "ResizeObserver loop completed with undelivered notifications"(良性但很吵)。挪到 rAF 后循环被打破。
+      if (e._wsRaf) return;                            // 一帧内多次 resize 通知合并成一次
+      e._wsRaf = requestAnimationFrame(() => {
+        e._wsRaf = 0;
+        const r = e.getBoundingClientRect();           // rAF 里读元素最新 border-box 尺寸(不用可能已过期的 entry)
+        const w = Math.round(r.width), h = Math.round(r.height);
         if (w !== e._wsW) { e._wsW = w; writeField(id, "width", w); }
         if (h !== e._wsH) { e._wsH = h; writeField(id, "height", h); }
         const ov = (e.scrollWidth > e.clientWidth || e.scrollHeight > e.clientHeight) ? 1 : 0;
         if (ov !== e._wsOv) { e._wsOv = ov; writeField(id, "overflowed", ov); }
-      }
+      });
     });
     e._wsRo.observe(e);
   },
