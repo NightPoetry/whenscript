@@ -88,6 +88,20 @@ number brandMark() {
   return svg;
 }
 
+// 品牌链接:logo + 名字做成一个可点锚点,指向 landing.html(when 版首页)——
+// 点它回到 when 版首页,而不是跳去 HTML 版 index.html。
+number brandLink() {
+  number a = create("a");
+  setAttr(a, "href", "./landing.html");
+  setStyle(a, "display", "flex"); setStyle(a, "align-items", "center"); setStyle(a, "gap", "10px"); setStyle(a, "text-decoration", "none");
+  append(a, brandMark());
+  number t = create("span");
+  setText(t, "WhenScript");
+  setStyle(t, "font-weight", "700"); setStyle(t, "font-size", "17px"); setStyle(t, "color", cText);
+  append(a, t);
+  return a;
+}
+
 // 方波分割线:一道横贯的信号方波(呼应「一切皆信号」),真实 <svg> path。
 number waveDivider() {
   number svg = create("svg");
@@ -125,11 +139,7 @@ container NavBar() {
   bg: cBg; borderBottom: "1px solid " + cLine; position: "sticky"; top: 0; zIndex: "20"; backdropFilter: "blur(10px)";
   WrapRow {
     gap: 22; pad: (0, 24); height: 58;
-    Row {
-      gap: 10; alignItems: "center";
-      append(self, brandMark());
-      Text("WhenScript") { weight: 700; size: 17; color: cText; }
-    }
+    append(self, brandLink());
     Row {
       marginLeft: "auto"; gap: 18; alignItems: "center"; flexWrap: "wrap";
       append(self, navLink("Playground", "./playground.html"));
@@ -149,7 +159,7 @@ container LiveCard() extends Column {
   Row {
     alignItems: "center"; gap: 8; pad: (10, 14); borderBottom: "1px solid " + cLine;
     Box { width: 8; height: 8; radius: 999; bg: cSignal; pulse: "1.6s"; }
-    Text("LIVE · 这块界面就是 WhenScript 本身") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; }
+    Text("LIVE · WhenScript 正在这个页面里运行") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; }
   }
 
   // 源码片段:下面这段跑着的演示,「大脑」就这四行 —— 与 hero.when 同构。
