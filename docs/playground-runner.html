@@ -52,11 +52,33 @@
     const r = e.reason; emit("ERROR: " + (r && r.message ? r.message : String(r)), true);
   });
 
+  // canvas 类demo(game2d 等)的容器是固定像素尺寸(如 320×480),不随 iframe 变矮而收缩 ——
+  // 面板矮于游戏高度时会被底部输出条盖住/看着"超出容器"。这里只做视觉缩放(transform:scale,
+  // 只缩小不放大),不碰 .when 里的坐标系统:从 canvas 往上找第一个带内联 width/height 的祖先
+  // (game2d 的 stage 容器)当作缩放目标,按可视区域重新计算比例。非 canvas 的示例(文本/长页面)
+  // 天然允许滚动,不触发这段逻辑。
+  function fitCanvasContainer() {
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return;
+    let el = canvas.parentElement;
+    while (el && el !== document.body && !(el.style.width && el.style.height)) el = el.parentElement;
+    if (!el || el === document.body) return;
+    const w = parseFloat(el.style.width), h = parseFloat(el.style.height);
+    if (!w || !h) return;
+    const availW = document.body.clientWidth - 32;   // 左右各 16px padding
+    const availH = window.innerHeight - 16 - 132;     // 顶部 padding + 底部输出条预留空间
+    const scale = Math.min(1, availW / w, availH / h);
+    el.style.transform = scale < 1 ? `scale(${scale})` : "";
+    el.style.transformOrigin = "top center";
+  }
+
   (async () => {
     try {
       const source = localStorage.getItem("wsPlaygroundSrc") || "";
       if (!source) { emit("(空程序 —— 在左侧编辑区写点 WhenScript)"); return; }
       await boot("./whenscript.wasm", source);
+      fitCanvasContainer();
+      window.addEventListener("resize", fitCanvasContainer);
     } catch (e) {
       emit("ERROR: " + (e && e.message ? e.message : String(e)), true);
     }
