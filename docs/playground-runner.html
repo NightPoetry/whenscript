@@ -22,9 +22,10 @@
 <div id="out"><div class="placeholder">(输出 —— print() 的内容和报错会显示在这里)</div></div>
 <script type="module">
   // playground 的沙箱 trampoline(纯 infra,非 when 化目标:它就是 boot wasm 的引导层)。
-  // 每次"运行"父页 playground.when 都把源码 toHex 编进本页的 ?hex= 参数、换 &n= 强制整页重载 →
+  // 每次"运行"父页 playground.when 把源码存进 localStorage(storage.set)、本页只带 ?n= 换页 →
   // 天然是"一个干净引擎实例、只 boot 一次"。app 的 DOM 由 host_create 挂到 body;print()/报错捕获进
-  // 底部固定输出条(不再 postMessage 给父页 —— 父页是 when 写的,不做跨 frame 消息)。
+  // 底部固定输出条(不用 postMessage,也不把源码塞进 URL —— 同源 localStorage 直接读,不受 HTTP
+  // 请求行/头长度上限限制;大文件如 game.when/blog.when 编进 ?hex= URL 会超限直接 431)。
   import { boot } from "./host.js";
 
   const outEl = document.getElementById("out");
@@ -51,18 +52,9 @@
     const r = e.reason; emit("ERROR: " + (r && r.message ? r.message : String(r)), true);
   });
 
-  // 十六进制解码(URL 全安全字符,零转义):父页 toHex(源码) → 这里还原成 UTF-8。
-  function hexDecode(h) {
-    if (h.length % 2) return "";
-    const bytes = new Uint8Array(h.length / 2);
-    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(h.substr(i * 2, 2), 16);
-    return new TextDecoder().decode(bytes);
-  }
-
   (async () => {
     try {
-      const hex = new URLSearchParams(location.search).get("hex") || "";
-      const source = hex ? hexDecode(hex) : "";
+      const source = localStorage.getItem("wsPlaygroundSrc") || "";
       if (!source) { emit("(空程序 —— 在左侧编辑区写点 WhenScript)"); return; }
       await boot("./whenscript.wasm", source);
     } catch (e) {

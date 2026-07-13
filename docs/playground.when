@@ -5,16 +5,19 @@
 //  WhenScript 程序,在你浏览器里由 wasm 引擎实时执行。「反应式语言的 playground 自己也是反应式的」:
 //  改一个值(code),依赖它的一切(高亮层、行号、自动重跑)自己流动。
 //
-//  运行机制:每次运行把源码 toHex 编进 playground-runner.html 的 ?hex= 参数、换 &n= 强制整页重载
-//  → 每次都是一个干净的引擎实例(runner 是纯 infra 沙箱)。父子之间不做跨 frame 消息 —— 父页是
-//  when 写的,只 setAttr(iframe,"src",...) 送源码,runner 在 iframe 内自渲染 app + 控制台输出。
+//  运行机制:每次运行把源码存进 localStorage(storage.set)、iframe src 只带 ?n= 强制整页重载
+//  → 每次都是一个干净的引擎实例(runner 是纯 infra 沙箱)。父子同源、不做跨 frame 消息 —— 父页是
+//  when 写的,只 setAttr(iframe,"src",...) 换页,runner 自己从 localStorage 取源码。
+//  (曾经把源码 toHex 塞进 ?hex= URL 参数——大文件如 game.when/blog.when 一编码就超 HTTP 头/URL
+//   长度上限,本地开发服务器直接 431;localStorage 无此限制,已改用它。)
 //
 //  用到的读取原语(2026-07-13 新增):getNum(滚动位置/行高/选区)· setNum(滚动/选区)· preventKeys(Tab)。
 // ══════════════════════════════════════════════════════════════════════════════
 import { create, setText, setAttr, setStyle, append, on, getNum, setNum, preventKeys, urlParam } from "dom";
 import { fetch } from "net";
-import { toHex, substring, len, split, contains, fromBase64, fromBytes, replace } from "strings";
+import { substring, len, split, contains, fromBase64, fromBytes, replace } from "strings";
 import { delay } from "timer";
+import { set as storageSet } from "storage";
 
 // ── 设计 token(与旧 playground.html 的 :root 逐值一致)────────────────────────────
 string cBg       = "#171426";
@@ -73,10 +76,11 @@ number selectEl    = create("select");
 number gutterEl    = create("pre");     // 行号栏(不换行,逐行等高,与 textarea 各行对齐)
 number highlightEl = create("pre");     // 语法高亮层(彩色,置于透明 textarea 之下,滚动同步)
 
-// ── 运行:把 code 编进 runner 的 ?hex=,换 &n= 强制重载(每次干净引擎实例)──────────
+// ── 运行:源码存进 localStorage,iframe src 只带 ?n=(换 &n= 强制重载 = 每次干净引擎实例)──
 void runNow() {
   runNonce = runNonce + 1;
-  setAttr(resultFrame, "src", "playground-runner.html?hex=" + toHex(code) + "&n=" + runNonce);
+  storageSet("wsPlaygroundSrc", code);
+  setAttr(resultFrame, "src", "playground-runner.html?n=" + runNonce);
 }
 
 // ── 防抖自动重跑(反应式语言的 playground 也该是反应式的)────────────────────────
