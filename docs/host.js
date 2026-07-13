@@ -12,21 +12,9 @@ const hMap = {};
 const dec = (p, l) => new TextDecoder().decode(new Uint8Array(X.memory.buffer, p, l));
 // W9:HTML 布尔属性——存在与否决定语义,不是字符串值(见 host_set_attr)。
 const BOOL_ATTRS = new Set(["disabled", "checked", "readonly", "required", "selected", "multiple"]);
-// 个人博客 demo:SVG 标签需要 createElementNS(否则 document.createElement 建出的 <svg>/<path> 落在 HTML
-// 命名空间、浏览器当成未知元素、静默不渲染)。纯 host 侧(JS)绑定修复,dom.rs 的 `create(tag)` 通用原语不用改——
-// 用户 .when 代码本来就能直接调用 create("svg")/create("path") 拼真实 SVG,零新语法。
+// SVG 命名空间常量(host_html_mask 也用到)。SVG 标签白名单、createElementNS 决策、WebKit 蒙版重绘
+// 等【浏览器兼容怪癖】统一收敛在下方 `Compat` 兼容层——不散到各处、host_* 原语只调它。
 const SVG_NS = "http://www.w3.org/2000/svg";
-const SVG_TAGS = new Set([
-  "svg", "path", "circle", "rect", "ellipse", "line", "polyline", "polygon", "g",
-  "defs", "linearGradient", "radialGradient", "stop", "clipPath", "mask",
-  "text", "tspan", "use", "filter", "feGaussianBlur", "feColorMatrix", "feMerge",
-  "feMergeNode", "feOffset", "feFlood", "feComposite", "marker", "symbol", "pattern",
-  // filter primitives are camelCase and MUST be created in the SVG namespace — a plain createElement
-  // lowercases them (`<fefunca>`), silently voiding the primitive. feComponentTransfer/feFuncA back the
-  // luminance→alpha-invert used by mask `invert(…)`/`subtract(…)`.
-  "feComponentTransfer", "feFuncA", "feFuncR", "feFuncG", "feFuncB",
-  "feBlend", "feImage", "feTile", "feTurbulence", "feDisplacementMap", "feMorphology", "feDropShadow",
-]);
 
 // host→引擎:DOM 事件 / 定时器到点 → 触发 WhenScript event(token = event.id),读回 print 输出。
 const fire = (wsid) => { const o = rd(X.ws_fire(wsid)); if (o) console.log("[ws_fire]", o); };
@@ -147,30 +135,53 @@ const SOUNDS = {
   flap:  (ctx) => blip(ctx, { type: "triangle", f0: 520, f1: 380, dur: 0.06, gain: 0.12 }),
 };
 
-// ── WebKit 蒙版重绘补丁 ────────────────────────────────────────────────────────────
-// Safari/WebKit 不会因为一个被 `mask:url(#id)` 引用的 <mask> 的【子内容】变了就重绘引用它的盒子
-// (换蒙版点了不动、聚光灯拖了不动)。改盒子自己的 mask 属性【值】(换个 id)才强制它重解析+重绘。
-// 换蒙版走 wsMask 换 id 已在引擎侧修;这里补"就地改 mask 子元素属性/样式"这条不过 wsMask 的路
-// (如聚光灯 setAttr(circle,"cx"))——记住每张 mask 归哪个盒子,子内容一变就给盒子换新 mask url。
-const maskUrlBox = {};   // 当前 mask 元素 id -> 引用它的盒子元素
-let maskRepaintN = 0;
-function recordMaskUrl(el, val) {
-  const m = /url\(["']?#([\w.\-]+)/.exec(val || "");
-  if (m) maskUrlBox[m[1]] = el;
-}
-function nudgeMaskRepaint(el) {
-  if (!el || el.namespaceURI !== SVG_NS || !el.closest) return;  // 只有 SVG(mask 子内容)才可能命中
-  const mask = el.closest("mask");
-  if (!mask) return;
-  const box = maskUrlBox[mask.id];
-  if (!box) return;
-  const nid = mask.id.replace(/(\.r\d+)+$/, "") + ".r" + (++maskRepaintN);  // strip old .r 后缀,别让 id 越拖越长
-  delete maskUrlBox[mask.id];
-  mask.id = nid;
-  const u = "url(#" + nid + ")";
-  box.style.mask = u; box.style.webkitMask = u;
-  maskUrlBox[nid] = box;
-}
+// ══════════════════════════════════════════════════════════════════════════════════════
+//  Compat —— 前端引擎的【浏览器兼容层】
+//  所有针对浏览器差异(尤其 Safari/WebKit vs Chrome)的怪癖处理【只】收在这里,不散到别处。
+//  host_* 原语保持"纯搬运",涉及兼容的一律委托本层。反应式内核(Rust core/)与语言/.when 零感知。
+//  —— 蒙版渲染的另一半兼容(明度→alpha、SVG 原生滤镜、组合用 mask= 嵌套、换蒙版换 id 重绘)在
+//     Rust 侧 `core/web/dom.rs` 的 web 兑现层;两处合起来 = 前端兼容层的全貌。
+// ══════════════════════════════════════════════════════════════════════════════════════
+const Compat = {
+  // (1) SVG 命名空间:SVG 标签名大小写敏感,必须 createElementNS;滤镜原语(feComponentTransfer/
+  //     feFuncA…)漏进白名单会被 createElement 小写成 <fefunca> 静默失效。
+  SVG_TAGS: new Set([
+    "svg", "path", "circle", "rect", "ellipse", "line", "polyline", "polygon", "g",
+    "defs", "linearGradient", "radialGradient", "stop", "clipPath", "mask",
+    "text", "tspan", "use", "filter", "feGaussianBlur", "feColorMatrix", "feMerge",
+    "feMergeNode", "feOffset", "feFlood", "feComposite", "marker", "symbol", "pattern",
+    "feComponentTransfer", "feFuncA", "feFuncR", "feFuncG", "feFuncB",
+    "feBlend", "feImage", "feTile", "feTurbulence", "feDisplacementMap", "feMorphology", "feDropShadow",
+  ]),
+  createElement(tag) {
+    return this.SVG_TAGS.has(tag) ? document.createElementNS(SVG_NS, tag) : document.createElement(tag);
+  },
+
+  // (2) WebKit 蒙版重绘:WebKit 不会因一个被 `mask:url(#id)` 引用的 <mask> 的【子内容】变了就重绘引用
+  //     它的盒子(换蒙版点了不动、聚光灯拖了不动)。改盒子自己的 mask 属性【值】(换 id)才强制重绘。
+  //     换蒙版走 wsMask 换 id 在 Rust 侧修;这里补"就地改 mask 子元素(如 setAttr(circle,'cx'))"这条路。
+  _maskUrlBox: {},  // 当前 mask 元素 id -> 引用它的盒子元素
+  _repaintN: 0,
+  // 盒子设了 mask:url(#id) 时记下归属(host_set_style 调)。
+  recordMaskUrl(el, val) {
+    const m = /url\(["']?#([\w.\-]+)/.exec(val || "");
+    if (m) this._maskUrlBox[m[1]] = el;
+  },
+  // 就地改了某个正在某张 <mask> 里的元素(host_set_attr/set_style 调)→ 给引用盒子换 mask url 逼重绘。
+  nudgeMaskRepaint(el) {
+    if (!el || el.namespaceURI !== SVG_NS || !el.closest) return;  // 只有 SVG(mask 子内容)才可能命中
+    const mask = el.closest("mask");
+    if (!mask) return;
+    const box = this._maskUrlBox[mask.id];
+    if (!box) return;
+    const nid = mask.id.replace(/(\.r\d+)+$/, "") + ".r" + (++this._repaintN);  // strip 旧 .r 后缀,别越拖越长
+    delete this._maskUrlBox[mask.id];
+    mask.id = nid;
+    const u = "url(#" + nid + ")";
+    box.style.mask = u; box.style.webkitMask = u;
+    this._maskUrlBox[nid] = box;
+  },
+};
 
 const imports = { env: {
   // create(tag) → 新元素;先挂 body,被 append 到别处时浏览器自动移走 → 只有「根」留在 body。
@@ -183,7 +194,7 @@ const imports = { env: {
       if (existing) { els[id] = existing; return id; }
       // 超出服务端集合(客户端动态多建的节点)→ 落到新建
     }
-    const el = SVG_TAGS.has(tag) ? document.createElementNS(SVG_NS, tag) : document.createElement(tag);
+    const el = Compat.createElement(tag);   // SVG 命名空间决策在兼容层
     els[id] = el;
     document.body.appendChild(el);
     return id;
@@ -201,11 +212,11 @@ const imports = { env: {
                                            if (k === "value") { if (e.value !== val) e.value = val; }
                                            else if (BOOL_ATTRS.has(k)) { if (val === "false" || val === "") e.removeAttribute(k); else e.setAttribute(k, ""); }
                                            else e.setAttribute(k, val);
-                                           nudgeMaskRepaint(e); },   // 就地改了 mask 子内容 → 逼 WebKit 重绘引用盒子
+                                           Compat.nudgeMaskRepaint(e); },   // 就地改了 mask 子内容 → 逼 WebKit 重绘(兼容层)
   host_set_style: (id, p, pl, v, vl)  => { const e = els[id]; if (!e) return; const k = dec(p, pl), val = dec(v, vl);
                                            e.style[k] = val;
-                                           if (k === "mask") recordMaskUrl(e, val);   // 记住这张 mask 归哪个盒子
-                                           else nudgeMaskRepaint(e); },                // 改 mask 子内容样式(如 filter)也重绘
+                                           if (k === "mask") Compat.recordMaskUrl(e, val);   // 记住这张 mask 归哪个盒子
+                                           else Compat.nudgeMaskRepaint(e); },                // 改 mask 子内容样式也重绘
   // 读/写数值属性 —— setStyle/setAttr 的读侧对称半边。读:scrollTop/scrollLeft/scrollHeight/offsetHeight/
   // offsetWidth/clientHeight/clientWidth/selectionStart/selectionEnd… (非数值/缺失 → 0)。写:同名可写属性。
   host_get_num:   (id, pp, pl)        => { const e = els[id]; if (!e) return 0; const v = e[dec(pp, pl)]; return typeof v === "number" ? v : 0; },
