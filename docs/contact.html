@@ -18,13 +18,13 @@
 <script type="module">
   // SSR 快照已经是完整首屏——这段只负责"接管"：fetch 同一份源码、boot() 引擎，
   // host.js 认领既有 data-ws-h 节点使其变为活的反应式 DOM，不重新建页面、不闪烁。
-  import { boot } from "./host.js";
+  import { boot } from "./host.js?v=d288e36142";
   window.addEventListener("error", (e) => console.error("[hydrate]", (e && e.message) || e));
   (async () => {
     const res = await fetch("./contact.when");
     if (!res.ok) throw new Error("取不到源码(" + res.status + ")");
     const source = await res.text();
-    await boot("./whenscript.wasm", source);
+    await boot("./whenscript.wasm?v=d288e36142", source);
   })().catch((e) => console.error("[hydrate]", e));
 </script>
 </body>

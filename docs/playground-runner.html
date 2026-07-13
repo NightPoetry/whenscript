@@ -26,7 +26,7 @@
   // 天然是"一个干净引擎实例、只 boot 一次"。app 的 DOM 由 host_create 挂到 body;print()/报错捕获进
   // 底部固定输出条(不用 postMessage,也不把源码塞进 URL —— 同源 localStorage 直接读,不受 HTTP
   // 请求行/头长度上限限制;大文件如 game.when/blog.when 编进 ?hex= URL 会超限直接 431)。
-  import { boot } from "./host.js";
+  import { boot } from "./host.js?v=d288e36142";
 
   const outEl = document.getElementById("out");
   function emit(text, isErr) {
@@ -97,7 +97,7 @@
     try {
       const source = localStorage.getItem("wsPlaygroundSrc") || "";
       if (!source) { emit("(空程序 —— 在左侧编辑区写点 WhenScript)"); return; }
-      await boot("./whenscript.wasm", source);
+      await boot("./whenscript.wasm?v=d288e36142", source);
       fitCanvasContainer();
       window.addEventListener("resize", fitCanvasContainer);
     } catch (e) {

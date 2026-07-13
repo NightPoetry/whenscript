@@ -21,6 +21,11 @@ const SVG_TAGS = new Set([
   "defs", "linearGradient", "radialGradient", "stop", "clipPath", "mask",
   "text", "tspan", "use", "filter", "feGaussianBlur", "feColorMatrix", "feMerge",
   "feMergeNode", "feOffset", "feFlood", "feComposite", "marker", "symbol", "pattern",
+  // filter primitives are camelCase and MUST be created in the SVG namespace — a plain createElement
+  // lowercases them (`<fefunca>`), silently voiding the primitive. feComponentTransfer/feFuncA back the
+  // luminance→alpha-invert used by mask `invert(…)`/`subtract(…)`.
+  "feComponentTransfer", "feFuncA", "feFuncR", "feFuncG", "feFuncB",
+  "feBlend", "feImage", "feTile", "feTurbulence", "feDisplacementMap", "feMorphology", "feDropShadow",
 ]);
 
 // host→引擎:DOM 事件 / 定时器到点 → 触发 WhenScript event(token = event.id),读回 print 输出。
@@ -142,6 +147,31 @@ const SOUNDS = {
   flap:  (ctx) => blip(ctx, { type: "triangle", f0: 520, f1: 380, dur: 0.06, gain: 0.12 }),
 };
 
+// ── WebKit 蒙版重绘补丁 ────────────────────────────────────────────────────────────
+// Safari/WebKit 不会因为一个被 `mask:url(#id)` 引用的 <mask> 的【子内容】变了就重绘引用它的盒子
+// (换蒙版点了不动、聚光灯拖了不动)。改盒子自己的 mask 属性【值】(换个 id)才强制它重解析+重绘。
+// 换蒙版走 wsMask 换 id 已在引擎侧修;这里补"就地改 mask 子元素属性/样式"这条不过 wsMask 的路
+// (如聚光灯 setAttr(circle,"cx"))——记住每张 mask 归哪个盒子,子内容一变就给盒子换新 mask url。
+const maskUrlBox = {};   // 当前 mask 元素 id -> 引用它的盒子元素
+let maskRepaintN = 0;
+function recordMaskUrl(el, val) {
+  const m = /url\(["']?#([\w.\-]+)/.exec(val || "");
+  if (m) maskUrlBox[m[1]] = el;
+}
+function nudgeMaskRepaint(el) {
+  if (!el || el.namespaceURI !== SVG_NS || !el.closest) return;  // 只有 SVG(mask 子内容)才可能命中
+  const mask = el.closest("mask");
+  if (!mask) return;
+  const box = maskUrlBox[mask.id];
+  if (!box) return;
+  const nid = mask.id.replace(/(\.r\d+)+$/, "") + ".r" + (++maskRepaintN);  // strip old .r 后缀,别让 id 越拖越长
+  delete maskUrlBox[mask.id];
+  mask.id = nid;
+  const u = "url(#" + nid + ")";
+  box.style.mask = u; box.style.webkitMask = u;
+  maskUrlBox[nid] = box;
+}
+
 const imports = { env: {
   // create(tag) → 新元素;先挂 body,被 append 到别处时浏览器自动移走 → 只有「根」留在 body。
   host_create: (tp, tl) => {
@@ -170,8 +200,12 @@ const imports = { env: {
   host_set_attr:  (id, n, nl, v, vl)  => { const e = els[id]; if (!e) return; const k = dec(n, nl), val = dec(v, vl);
                                            if (k === "value") { if (e.value !== val) e.value = val; }
                                            else if (BOOL_ATTRS.has(k)) { if (val === "false" || val === "") e.removeAttribute(k); else e.setAttribute(k, ""); }
-                                           else e.setAttribute(k, val); },
-  host_set_style: (id, p, pl, v, vl)  => { if (els[id]) els[id].style[dec(p, pl)] = dec(v, vl); },
+                                           else e.setAttribute(k, val);
+                                           nudgeMaskRepaint(e); },   // 就地改了 mask 子内容 → 逼 WebKit 重绘引用盒子
+  host_set_style: (id, p, pl, v, vl)  => { const e = els[id]; if (!e) return; const k = dec(p, pl), val = dec(v, vl);
+                                           e.style[k] = val;
+                                           if (k === "mask") recordMaskUrl(e, val);   // 记住这张 mask 归哪个盒子
+                                           else nudgeMaskRepaint(e); },                // 改 mask 子内容样式(如 filter)也重绘
   // 读/写数值属性 —— setStyle/setAttr 的读侧对称半边。读:scrollTop/scrollLeft/scrollHeight/offsetHeight/
   // offsetWidth/clientHeight/clientWidth/selectionStart/selectionEnd… (非数值/缺失 → 0)。写:同名可写属性。
   host_get_num:   (id, pp, pl)        => { const e = els[id]; if (!e) return 0; const v = e[dec(pp, pl)]; return typeof v === "number" ? v : 0; },
