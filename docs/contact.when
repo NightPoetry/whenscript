@@ -39,7 +39,6 @@ string cHoneypot  = "";       // 蜜罐字段:对人隐藏,机器人才会填
 bool   cSending   = false;
 string cStatusKind = "";      // "" | "ok" | "err" | "busy"
 string cStatusMsg  = "";
-bool   cShowAlt    = false;   // 替代渠道卡片:默认隐藏,发送失败才展示
 
 // 派生值:trim 三个字段(对齐原 JS 的 .value.trim())。
 string tName  := trim(cName);
@@ -105,6 +104,47 @@ number ctaLink(string label, string href, bool primary) {
     setStyle(a, "border", "1px solid " + cLine);
   }
   return a;
+}
+
+// ── 联系渠道卡片(右栏用):eyebrow 徽章 + 标题 + 说明 + 可选外链。沿用站内 eyebrow-badge 风格,
+//    不用 emoji,保持"官方正式"。手拼 DOM(与 navLink/ctaLink 同一路子)。────────────────────
+number channelBadge(string label, string col) {
+  number b = create("span");
+  setText(b, label);
+  setStyle(b, "display", "inline-block"); setStyle(b, "font-family", fMono); setStyle(b, "font-size", "11px");
+  setStyle(b, "letter-spacing", "0.14em"); setStyle(b, "color", col);
+  setStyle(b, "border", "1px solid " + cLine); setStyle(b, "border-radius", "999px");
+  setStyle(b, "padding", "5px 10px"); setStyle(b, "background", cBgDeep); setStyle(b, "margin-bottom", "14px");
+  return b;
+}
+
+number channelCard(string eyebrow, string eyebrowCol, string title, string desc, string linkLabel, string linkHref) {
+  number c = create("div");
+  setStyle(c, "background", cPanel); setStyle(c, "border", "1px solid " + cLine);
+  setStyle(c, "border-radius", "12px"); setStyle(c, "padding", "20px"); setStyle(c, "margin-bottom", "14px");
+  append(c, channelBadge(eyebrow, eyebrowCol));
+  number h = create("div");
+  setText(h, title);
+  setStyle(h, "font-size", "16px"); setStyle(h, "font-weight", "700"); setStyle(h, "color", cText); setStyle(h, "margin-bottom", "8px");
+  append(c, h);
+  number d = create("p");
+  setText(d, desc);
+  setStyle(d, "font-size", "13.5px"); setStyle(d, "color", cDim); setStyle(d, "line-height", "1.6"); setStyle(d, "margin", "0");
+  append(c, d);
+  if (len(linkHref) > 0) {
+    number a = create("a");
+    setText(a, linkLabel);
+    setAttr(a, "href", linkHref); setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener");
+    setStyle(a, "display", "inline-block"); setStyle(a, "margin-top", "14px"); setStyle(a, "color", cSignal);
+    setStyle(a, "font-size", "14px"); setStyle(a, "font-weight", "600"); setStyle(a, "text-decoration", "none");
+    append(c, a);
+  } else {
+    number sfx = create("div");
+    setText(sfx, linkLabel);
+    setStyle(sfx, "margin-top", "14px"); setStyle(sfx, "font-family", fMono); setStyle(sfx, "font-size", "13px"); setStyle(sfx, "color", cDim);
+    append(c, sfx);
+  }
+  return c;
 }
 
 number brandMark() {
@@ -194,7 +234,7 @@ container Field(string label) extends Column {
 
 // ── 联系表单本体 ─────────────────────────────────────────────────────────────
 container ContactForm() extends Column {
-  id: "contactForm"; width: "560px"; maxWidth: "100%";
+  id: "contactForm"; width: fill; minWidth: "300px"; maxWidth: "560px";
 
   event<group> onContactResponse;
 
@@ -277,8 +317,7 @@ container ContactForm() extends Column {
       cStatusMsg = "已收到你的留言,我们会尽快回信到 " + tEmail + "。";
     } else {
       cStatusKind = "err";
-      cStatusMsg = "发送失败(网络或服务端问题),请稍后重试;急事可先去 VS Code Marketplace 的 Q&A 留言。";
-      cShowAlt = true;
+      cStatusMsg = "发送失败(网络或服务端问题),请稍后重试;急事可先用右侧渠道联系我们。";
     }
   }
 
@@ -288,48 +327,33 @@ container ContactForm() extends Column {
   }
 }
 
-// ── 替代联系渠道:发送失败才出现,两张卡片用网格铺开(auto-fit 天然处理窄屏折行)────────
-container AltChannels() {
-  id: "altChannels"; marginTop: 8;
-  Box {
-    display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))"; gap: 18; maxWidth: "780px";
-
-    Column {
-      bg: cPanel; border: "1px solid " + cLine; radius: 12; pad: 24;
-      Text("now · 现在就能用") {
-        font: fMono; size: 11; letterSpacing: "0.14em"; color: cSignal;
-        border: "1px solid " + cLine; radius: 999; pad: (5, 10); marginBottom: 14; bg: cBgDeep; width: hug;
-      }
-      Text("VS Code Marketplace Q&A") { size: 17; weight: bold; color: cText; marginBottom: 10; }
-      Text("扩展页自带问答区:报 bug、提问都行,回复公开可查,后来人也能搜到同款问题。") {
-        size: 14; color: cDim; marginBottom: 16; lineHeight: "1.6";
-      }
-      number qnaCta = ctaLink("去 Q&A 提问", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript&ssr=false#qna", true);
-      setAttr(qnaCta, "target", "_blank"); setAttr(qnaCta, "rel", "noopener");
-      append(self, qnaCta);
-    }
-
-    Column {
-      bg: cPanel; border: "1px solid " + cLine; radius: 12; pad: 24;
-      Text("soon · 即将开通") {
-        font: fMono; size: 11; letterSpacing: "0.14em"; color: cDim;
-        border: "1px solid " + cLine; radius: 999; pad: (5, 10); marginBottom: 14; bg: cBgDeep; width: hug;
-      }
-      Text("联系邮箱") { size: 17; weight: bold; color: cText; marginBottom: 10; }
-      Text("专用联系邮箱正在开通中,开通后这里会换成直达表单——留言直接进我们的收件箱。") {
-        size: 14; color: cDim; marginBottom: 16; lineHeight: "1.6";
-      }
-      Text("coming soon…") { font: fMono; size: 13; color: cDim; lineHeight: "1.6"; }
-    }
-  }
+// ── 右栏:其他联系渠道(始终可见——访客不必等表单失败才看到备选方式)────────────────────
+container SideChannels() extends Column {
+  width: "340px"; maxWidth: "100%";
+  Text("channels · 其他方式") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 14; }
+  append(self, channelCard(
+    "now · 现在就能用", cSignal, "VS Code Marketplace Q&A",
+    "扩展页自带问答区:报 bug、提问都行,回复公开可查,后来人也能搜到同款问题。",
+    "去 Q&A 提问 →", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript&ssr=false#qna"));
+  append(self, channelCard(
+    "now · 现在就能用", cSignal, "GitHub",
+    "源码、Issues、讨论都在仓库里——提 issue 报问题,或直接发 PR,都欢迎。",
+    "去 GitHub →", "https://github.com/NightPoetry/whenscript"));
+  append(self, channelCard(
+    "soon · 即将开通", cDim, "联系邮箱",
+    "专用联系邮箱正在开通中,开通后这里会换成直达邮箱——留言直接进我们的收件箱。",
+    "coming soon…", ""));
 }
 
 container ContactSection() {
   bg: cBg; pad: (40, 0, 72, 0);
   WrapCol {
     pad: (0, 24);
-    ContactForm()
-    if (cShowAlt) { AltChannels() }
+    Row {
+      gap: 48; flexWrap: "wrap"; alignItems: "start";
+      ContactForm()
+      SideChannels()
+    }
   }
 }
 
