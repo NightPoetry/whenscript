@@ -453,7 +453,7 @@ container ContactSection() {
   }
 }
 
-container Footer() {
+container SiteFooter() {
   bg: cardColor; borderTop: "1px solid " + lineColor;
   number wave = buildWaveDivider();
   append(self, wave);
@@ -478,7 +478,7 @@ container App() {
   SkillsSection()
   PostsSection()
   ContactSection()
-  Footer()
+  SiteFooter()
 }
 
 setStyle(query("body"), "margin", "0");

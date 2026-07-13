@@ -10,7 +10,7 @@
 //  create/setAttr/setStyle/append 手拼(导航锚点、品牌 logo、方波分割线全是真实 DOM/SVG)。
 //  设计 token 与 index.html 完全同源(见下方色板)。
 // ══════════════════════════════════════════════════════════════════════════════
-import { create, setAttr, setStyle, setText, append, query, Text, Button } from "dom";
+import { create, setAttr, setStyle, setText, append, query, animate, Text, Button } from "dom";
 
 // ── 设计 token(与 index.html 的 :root 变量逐值一致)──────────────────────────
 string cBg     = "#1e1b2e";   // --bg
@@ -32,21 +32,38 @@ number count = 0;
 number double := count * 2;                                          // 派生:count 一变它就变
 string liveColor := if (count > 4) { cSignal } else { cTrace };      // 条件色:过阈值转琥珀
 string liveMood  := if (count > 4) {
-  "🔥 信号拉满 —— 依赖 count 的一切都跟着动了"
+  "信号已跨过阈值 —— 依赖 count 的一切都跟着动了"
 } else {
   "点下面的按钮:写入 count,看依赖它的值自己流动"
 };
 
 // ── 手拼 DOM 原语:导航锚点(现有 .when 没人写过真 <a>,这里用 create/setAttr 拼)──────
-number navLink(string label, string href) {
+// active=当前就是这一页(高亮);external=新窗口打开的站外链接。
+number navLink(string label, string href, bool active, bool external) {
   number a = create("a");
   setText(a, label);
   setAttr(a, "href", href);
-  setStyle(a, "color", cDim);
+  if (external) { setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener"); }
   setStyle(a, "font-size", "14px");
   setStyle(a, "font-weight", "500");
   setStyle(a, "text-decoration", "none");
   setStyle(a, "padding", "4px 2px");
+  setStyle(a, "border-bottom", "2px solid transparent");
+  if (active) {
+    setStyle(a, "color", cText);
+    setStyle(a, "border-bottom", "2px solid " + cSignal);
+  } else {
+    setStyle(a, "color", cDim);
+  }
+  return a;
+}
+
+// VS Code 扩展 CTA:导航栏里唯一的强调色文字链接(不是按钮),呼应 index.html 旧版 nav .links a.cta。
+number navCta(string label, string href) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href); setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener");
+  setStyle(a, "color", cSignal); setStyle(a, "font-size", "14px"); setStyle(a, "font-weight", "600"); setStyle(a, "text-decoration", "none");
   return a;
 }
 
@@ -88,11 +105,10 @@ number brandMark() {
   return svg;
 }
 
-// 品牌链接:logo + 名字做成一个可点锚点,指向 landing.html(when 版首页)——
-// 点它回到 when 版首页,而不是跳去 HTML 版 index.html。
+// 品牌链接:logo + 名字做成一个可点锚点,指向首页。
 number brandLink() {
   number a = create("a");
-  setAttr(a, "href", "./landing.html");
+  setAttr(a, "href", "./index.html");
   setStyle(a, "display", "flex"); setStyle(a, "align-items", "center"); setStyle(a, "gap", "10px"); setStyle(a, "text-decoration", "none");
   append(a, brandMark());
   number t = create("span");
@@ -102,15 +118,34 @@ number brandLink() {
   return a;
 }
 
-// 方波分割线:一道横贯的信号方波(呼应「一切皆信号」),真实 <svg> path。
+// 方波分割线:一道横贯、持续向左滚动的信号方波(呼应「一切皆信号」)——真实 <svg>,
+// pattern 平铺一个周期的方波,再用 animate()(WAAPI,与 motion.when 同一个内置)把 <rect>
+// 逐帧向左推一个周期宽度、无限循环,视觉上就是示波器里的信号连续流过。
 number waveDivider() {
   number svg = create("svg");
   setAttr(svg, "viewBox", "0 0 1200 24"); setAttr(svg, "preserveAspectRatio", "none");
   setStyle(svg, "display", "block"); setStyle(svg, "width", "100%"); setStyle(svg, "height", "24px"); setStyle(svg, "opacity", "0.5");
-  number path = create("path");
-  setAttr(path, "d", "M0 18 H60 V6 H120 V18 H180 V6 H240 V18 H300 V6 H360 V18 H420 V6 H480 V18 H540 V6 H600 V18 H660 V6 H720 V18 H780 V6 H840 V18 H900 V6 H960 V18 H1020 V6 H1080 V18 H1140 V6 H1200");
-  setAttr(path, "fill", "none"); setAttr(path, "stroke", cSignal); setAttr(path, "stroke-width", "1.5");
-  append(svg, path);
+
+  number defs = create("defs");
+  append(svg, defs);
+  number pattern = create("pattern");
+  setAttr(pattern, "id", "waveTile");
+  setAttr(pattern, "width", "60"); setAttr(pattern, "height", "24"); setAttr(pattern, "patternUnits", "userSpaceOnUse");
+  append(defs, pattern);
+  number tile = create("path");
+  setAttr(tile, "d", "M0 18 H30 V6 H60");
+  setAttr(tile, "fill", "none"); setAttr(tile, "stroke", cSignal); setAttr(tile, "stroke-width", "1.5");
+  append(pattern, tile);
+
+  number rect = create("rect");
+  setAttr(rect, "x", "0"); setAttr(rect, "y", "0"); setAttr(rect, "width", "200%"); setAttr(rect, "height", "24");
+  setAttr(rect, "fill", "url(#waveTile)");
+  append(svg, rect);
+
+  // 关键帧:整个周期(60 个单位)平移一次,首尾无缝衔接成无限滚动。
+  group scroll = [ {transform: "translateX(0)"}, {transform: "translateX(-60px)"} ];
+  animate(rect, scroll, {duration: 2400, easing: "linear", iterations: "Infinity"});
+
   return svg;
 }
 
@@ -138,14 +173,16 @@ container WrapCol() extends Column {
 container NavBar() {
   bg: cBg; borderBottom: "1px solid " + cLine; position: "sticky"; top: 0; zIndex: "20"; backdropFilter: "blur(10px)";
   WrapRow {
-    gap: 22; pad: (0, 24); height: 58;
+    gap: 22; pad: (0, 24); height: 58; flexWrap: "wrap";
     append(self, brandLink());
     Row {
       marginLeft: "auto"; gap: 18; alignItems: "center"; flexWrap: "wrap";
-      append(self, navLink("Playground", "./playground.html"));
-      append(self, navLink("示例", "./examples.html"));
-      append(self, navLink("文档", "./docs.html"));
-      append(self, navLink("联系", "./contact.html"));
+      append(self, navLink("Playground", "./playground.html", false, false));
+      append(self, navLink("示例", "./examples.html", false, false));
+      append(self, navLink("文档", "./docs.html", false, false));
+      append(self, navLink("联系", "./contact.html", false, false));
+      append(self, navCta("VS Code 扩展", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript"));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
     }
   }
 }
@@ -194,7 +231,9 @@ container Hero() {
   WrapRow {
     pad: (0, 24); gap: 48; alignItems: "center"; flexWrap: "wrap";
     Column {
-      width: fill; minWidth: "300px";
+      // width:fill 现在能正确识别主轴:WrapRow extends Row,子元素沿主轴均分(flex:1 1 0),与 LiveCard 并排。
+      // (2026-07-13 修复前,自定义容器 extends Row 的子元素 fill 会静默退化成 width:100%,把 LiveCard 挤到下一行。)
+      minWidth: "300px"; width: fill;
       Text("event-driven · strongly-typed · reactive") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 20; }
       Text("写入,即触发。") { size: 56; weight: 900; color: cText; lineHeight: "1.15"; marginBottom: 10; }
       Text("WhenScript 是一门事件驱动的强类型反应式语言。没有轮询、没有手动订阅、没有虚拟 DOM —— 值一变,依赖它的一切自己动,像电流过电路。为人类与 AI 而生。") {
@@ -292,12 +331,116 @@ container ReactiveOp() {
 
     Column {
       bg: cPanel; border: "1px solid " + cLine; borderLeft: "3px solid " + cSignal; radius: 12; pad: (20, 24);
-      Text("逆天,但有边界 —— 它是电路,不是魔法") { size: 17; weight: bold; color: cText; marginBottom: 8; }
+      Text("强大,但有边界 —— 它是电路,不是魔法") { size: 17; weight: bold; color: cText; marginBottom: 8; }
       Text("每次写入,引擎先让所有 := 派生值收敛到不动点(glitch-free),再往下走 —— 你读到的永远是一个前后一致的世界,不会出现「半更新」的中间态。") {
         size: 14; color: cDim; marginBottom: 12; lineHeight: "1.7";
       }
       Text("万一你写出循环反馈 a := b + 1; b := a + 1,引擎不会无限转圈:它当场报一个 Reactive cycle,指出哪里短路了。强大是收敛的,不是失控的 —— 这正是把电路模型搬进语言的意义。") {
         size: 14; color: cDim; lineHeight: "1.7";
+      }
+    }
+  }
+}
+
+// ── before / after:同一个需求,两种写法(对照 index.html #contrast)─────────────
+container Contrast() {
+  bg: cBgDeep; pad: (64, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("before / after") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 10; }
+    Text("同一个需求,两种人生") { size: 30; weight: 800; color: cText; marginBottom: 14; lineHeight: "1.3"; }
+    Text("「count 变了,把它的双倍显示出来」—— 在事件回调的世界里,你负责记得通知所有人;在 WhenScript 里,依赖关系就是语言结构。") {
+      size: 15; color: cDim; maxWidth: "46em"; marginBottom: 28; lineHeight: "1.7";
+    }
+    Box {
+      display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))"; gap: 18; marginBottom: 22;
+
+      // 手动流水线:改一处,得记得同步派生值、通知所有人。
+      Column {
+        bg: cBg; border: "1px solid " + cLine; radius: 12; overflow: "hidden";
+        Text("JAVASCRIPT · 手动流水线") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; pad: (10, 16); borderBottom: "1px solid " + cLine; }
+        Column {
+          pad: 16; gap: 1;
+          append(self, codeLine("let count = 0, double = 0;", cText));
+          append(self, codeLine("const listeners = [];", cText));
+          append(self, codeLine("", cDim));
+          append(self, codeLine("function setCount(v) {", cText));
+          append(self, codeLine("  count = v;", cText));
+          append(self, codeLine("  double = count * 2;   // 别忘了同步派生值", cDim));
+          append(self, codeLine("  for (const fn of listeners) fn();  // 别忘了通知所有人", cDim));
+          append(self, codeLine("}", cText));
+        }
+      }
+
+      // 写入即触发:依赖关系是语言结构,不用手动同步/通知。
+      Column {
+        bg: cBg; border: "1px solid " + cLine; radius: 12; overflow: "hidden";
+        Text("WHENSCRIPT · 写入即触发") { font: fMono; size: 11; color: cSignal; letterSpacing: "0.12em"; pad: (10, 16); borderBottom: "1px solid " + cLine; }
+        Column {
+          pad: 16; gap: 1;
+          append(self, codeLine("number count  = 0;", cText));
+          append(self, codeLine("number double := count * 2;   // 派生:自动跟着变", cTrace));
+          append(self, codeLine("", cDim));
+          append(self, codeLine("when(add) { count = count + 1; }", cText));
+          append(self, codeLine("", cDim));
+          append(self, codeLine("changed(count) {", cText));
+          append(self, codeLine("  setText(label, \"\${count} / \${double}\");", cText));
+          append(self, codeLine("}", cText));
+        }
+      }
+    }
+    Text("没有 setState、没有订阅列表、没有「忘了通知」这种 bug 类别 —— 写入即触发是语义,不是纪律。") { size: 15; color: cDim; lineHeight: "1.7"; }
+  }
+}
+
+// ── capabilities:六张特性卡(对照 index.html #features)─────────────────────────
+container FeatCard(string title, string body) extends Column {
+  bg: "linear-gradient(160deg, " + cPanel + ", " + cBgDeep + ")"; border: "1px solid " + cLine; radius: 12; pad: 20;
+  Text(title) { size: 16; weight: bold; color: cText; marginBottom: 6; }
+  Text(body) { size: 13.5; color: cDim; lineHeight: "1.6"; }
+}
+
+container Features() {
+  bg: cBg; pad: (64, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("capabilities") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 10; }
+    Text("一门完整的语言,不是一个 DSL") { size: 30; weight: 800; color: cText; marginBottom: 36; lineHeight: "1.3"; }
+    Box {
+      display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))"; gap: 18;
+      FeatCard("强类型 + 类型转换格", "int < float < 高精度的精度阶。计算「升-算-降」不打扰你,赋值是唯一强制点;还有 number<string>:2 定点小数这样的冒号配置位。")
+      FeatCard("反应式全家族", "when 边沿触发、changed 每变必报、once 一次性、until 声明式生命周期、:= 持续绑定 —— 按需选择,语义各就各位。")
+      FeatCard("实体与确定性回收", "group 圈定实体作用域,离开即回收,watcher 随作用域确定性销毁。没有 GC 暂停,也没有内存泄漏式订阅。")
+      FeatCard("前端容器 + SSR 水合", "一切皆容器,布局就是 := 电路,没有虚拟 DOM。服务端渲染 + 客户端水合闭环,同一份 .when 前后端同构。")
+      FeatCard("静默失效零容忍", "语法错在执行前响亮报错,语义错带行列号,非法运算给出指名道姓的警告。「改了数据界面没动」这类 bug 在引擎层面被当作最高级别的罪。")
+      FeatCard("工具链全家桶", "check 静态诊断、fmt 保真格式化、LSP(诊断/悬停/补全)、REPL、pkg 去中心化包管理、graph 运行时依赖图,外加 VS Code 扩展。")
+    }
+  }
+}
+
+// ── get started:三十秒上手(对照 index.html #install)───────────────────────────
+container Install() {
+  bg: cBgDeep; pad: (64, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("get started") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 10; }
+    Text("三十秒上手") { size: 30; weight: 800; color: cText; marginBottom: 36; lineHeight: "1.3"; }
+    Box {
+      display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))"; gap: 18;
+      Column {
+        bg: cPanel; border: "1px solid " + cLine; radius: 12; pad: 24;
+        Text("先在浏览器里玩") { size: 17; weight: bold; color: cText; marginBottom: 10; }
+        Text("不装任何东西,Playground 里改一个值,看界面自己动。") { size: 14; color: cDim; marginBottom: 14; lineHeight: "1.6"; }
+        append(self, ctaLink("打开 Playground", "./playground.html", true));
+      }
+      Column {
+        bg: cPanel; border: "1px solid " + cLine; radius: 12; pad: 24;
+        Text("VS Code 扩展") { size: 17; weight: bold; color: cText; marginBottom: 10; }
+        Text("语法高亮、诊断、悬停文档、代码片段一应俱全。") { size: 14; color: cDim; marginBottom: 14; lineHeight: "1.6"; }
+        Column {
+          bg: cBgDeep; border: "1px solid " + cLine; radius: 8; pad: (12, 14);
+          Text("code --install-extension whenscript-lang.whenscript") { font: fMono; size: 13; color: cOk; }
+        }
       }
     }
   }
@@ -314,15 +457,18 @@ container App() {
   append(self, waveDivider());
   Philosophy()
   ReactiveOp()
+  Contrast()
+  Features()
+  Install()
   Footer {
     bg: cBg; borderTop: "1px solid " + cLine; pad: (32, 0, 44, 0);
     WrapRow {
       pad: (0, 24); gap: 20; flexWrap: "wrap"; alignItems: "center";
       Text("© 2026 WhenScript · 写入,即触发") { color: cDim; size: 13; }
       Box { width: fill; minWidth: "20px"; }
-      append(self, navLink("联系我们", "./contact.html"));
-      append(self, navLink("示例画廊", "./examples.html"));
-      append(self, navLink("文档", "./docs.html"));
+      append(self, navLink("联系我们", "./contact.html", false, false));
+      append(self, navLink("VS Code Marketplace", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript", false, true));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
     }
   }
 }

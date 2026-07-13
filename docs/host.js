@@ -172,6 +172,14 @@ const imports = { env: {
                                            else if (BOOL_ATTRS.has(k)) { if (val === "false" || val === "") e.removeAttribute(k); else e.setAttribute(k, ""); }
                                            else e.setAttribute(k, val); },
   host_set_style: (id, p, pl, v, vl)  => { if (els[id]) els[id].style[dec(p, pl)] = dec(v, vl); },
+  // 读/写数值属性 —— setStyle/setAttr 的读侧对称半边。读:scrollTop/scrollLeft/scrollHeight/offsetHeight/
+  // offsetWidth/clientHeight/clientWidth/selectionStart/selectionEnd… (非数值/缺失 → 0)。写:同名可写属性。
+  host_get_num:   (id, pp, pl)        => { const e = els[id]; if (!e) return 0; const v = e[dec(pp, pl)]; return typeof v === "number" ? v : 0; },
+  host_set_num:   (id, pp, pl, v)     => { const e = els[id]; if (e) e[dec(pp, pl)] = v; },
+  // preventKeys:列出的键在 keydown 时 preventDefault(Tab 插入两空格而非跳出文本框)。绑定的
+  // on(el,"keydown",ev) 仍照常触发 —— 这里只阻止浏览器对这些键的默认行为。keys = JSON 字符串数组。
+  host_prevent_keys: (id, kp, kl)     => { const e = els[id]; if (!e) return; let keys = []; try { keys = JSON.parse(dec(kp, kl)); } catch (_) {}
+                                           const set = new Set(keys); e.addEventListener("keydown", (de) => { if (set.has(de.key)) de.preventDefault(); }); },
   host_append:    (par, ch)           => { if (els[par] && els[ch]) els[par].appendChild(els[ch]); },
   host_remove:    (id)                => { if (els[id]) els[id].remove(); },   // reconcile 卸载子元素
   // 事件回灌:输入类元素(有 .value)走值桥 fireStr 带文本;其余(按钮/卡片点击)走无载荷 fire。
@@ -270,6 +278,8 @@ const imports = { env: {
   host_storage_get:    (kp, kl)         => { const v = localStorage.getItem(dec(kp, kl)); return v === null ? 0 : packStr(v); },
   host_storage_set:    (kp, kl, vp, vl) => { localStorage.setItem(dec(kp, kl), dec(vp, vl)); },
   host_storage_remove: (kp, kl)         => { localStorage.removeItem(dec(kp, kl)); },
+  // 读 URL 查询参数(location.search):同 host_storage_get 的字符串回传约定;缺失 → 0 → 引擎侧 "" 。
+  host_url_param:      (np, nl)         => { const v = new URLSearchParams(location.search).get(dec(np, nl)); return v === null ? 0 : packStr(v); },
   // ── game2d:保留模式 canvas 精灵 + rAF 帧时钟(实现见上方 gameTick)──────────
   // stage(w,h):建像素风 canvas,登进【同一张 els 元素表】→ dom 的 on/append/setStyle 直接可用(零新输入机制);
   // 同时初始化场景 + 启动 rAF 循环。重复调用 = 重置场景(重跑程序不叠加旧精灵)。

@@ -1,0 +1,586 @@
+// ══════════════════════════════════════════════════════════════════════════════
+//  WhenScript 用户手册页 —— 用 WhenScript 自己写的。
+//
+//  浏览器端 .when 文件之间不能互相 import(只能 import 内置模块),所以本文件自包含:
+//  设计 token / 导航栏 / 页脚 都是从 landing.when 原样搬过来的一份(不是引用,是复制)。
+//  八个板块(类型/反应式/事件/实体/函数/模块/前端/工具链)的文字与代码全部来自原 docs.html,
+//  逐字保留。语法高亮改用手动 codeLine(text, color) 布色(不重建正则分词器,见 landing.when
+//  同款约定);示例代码块本身只是"展示用的文本",不会被真的执行。
+//
+//  ⚠️ 踩坑记录(与 landing.when 相同的两个坑):
+//  1) 字符串里的 ${...} 永远会被求值 —— 本页多处示例代码本身就在讲解插值语法,字面上要
+//     显示 ${count} 这种文本时,必须写成 \${count}(反斜杠转义 $),否则会被当成表达式求值。
+//  2) `extends Row/Column` 的自定义容器下,子元素 width:fill/height:fill 现已能正确沿主轴均分
+//     (2026-07-13 修复;修复前会静默退化成 100%)。注:容器【自身】在定义体内写 width:fill 仍是
+//     100%(定义时不知会被放进什么方向的父容器,cfg_axis=None)——要让自身沿父级主轴填充,
+//     在定义体用 setStyle(self,"flex","1 1 0")(如下 DocsMain),或在使用点写 width:fill。
+// ══════════════════════════════════════════════════════════════════════════════
+import { create, setAttr, setStyle, setText, append, query, Text } from "dom";
+
+// ── 设计 token(与 landing.when / index.html 的 :root 变量逐值一致)──────────────
+string cBg     = "#1e1b2e";   // --bg
+string cBgDeep = "#171426";   // --bg-deep
+string cPanel  = "#26213c";   // --panel
+string cLine   = "#3b3358";   // --line
+string cText   = "#ece8f8";   // --text
+string cDim    = "#a89fc8";   // --dim
+string cSignal = "#ffb454";   // --signal 琥珀
+string cTrace  = "#6fd9e7";   // --trace  青
+string cArrow  = "#ff5fa2";   // --arrow  粉
+string cOk     = "#89ca78";   // --ok
+string fMono   = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+string fSans   = "system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+
+// ── 手拼 DOM 原语:导航锚点(与 landing.when 逐字一致)──────────────────────────
+number navLink(string label, string href, bool active, bool external) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  if (external) { setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener"); }
+  setStyle(a, "font-size", "14px");
+  setStyle(a, "font-weight", "500");
+  setStyle(a, "text-decoration", "none");
+  setStyle(a, "padding", "4px 2px");
+  setStyle(a, "border-bottom", "2px solid transparent");
+  if (active) {
+    setStyle(a, "color", cText);
+    setStyle(a, "border-bottom", "2px solid " + cSignal);
+  } else {
+    setStyle(a, "color", cDim);
+  }
+  return a;
+}
+
+// VS Code 扩展 CTA:导航栏里唯一的强调色文字链接(不是按钮)。
+number navCta(string label, string href) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href); setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener");
+  setStyle(a, "color", cSignal); setStyle(a, "font-size", "14px"); setStyle(a, "font-weight", "600"); setStyle(a, "text-decoration", "none");
+  return a;
+}
+
+// CTA 按钮 = 真锚点,primary=琥珀实心,否则描边幽灵按钮。
+number ctaLink(string label, string href, bool primary) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  setStyle(a, "display", "inline-block");
+  setStyle(a, "padding", "12px 22px");
+  setStyle(a, "border-radius", "10px");
+  setStyle(a, "font-size", "15px");
+  setStyle(a, "font-weight", "600");
+  setStyle(a, "text-decoration", "none");
+  if (primary) {
+    setStyle(a, "background", cSignal);
+    setStyle(a, "color", "#241c0a");
+    setStyle(a, "border", "1px solid " + cSignal);
+  } else {
+    setStyle(a, "background", "transparent");
+    setStyle(a, "color", cText);
+    setStyle(a, "border", "1px solid " + cLine);
+  }
+  return a;
+}
+
+// 品牌 logo:方波(step waveform)—— 与 index.html nav 里的 SVG 逐点一致,真实 <svg>。
+number brandMark() {
+  number svg = create("svg");
+  setAttr(svg, "width", "26"); setAttr(svg, "height", "26"); setAttr(svg, "viewBox", "0 0 26 26");
+  number rect = create("rect");
+  setAttr(rect, "width", "26"); setAttr(rect, "height", "26"); setAttr(rect, "rx", "6"); setAttr(rect, "fill", cBgDeep);
+  append(svg, rect);
+  number path = create("path");
+  setAttr(path, "d", "M4 17 H8 V9 H13 V17 H18 V9 H22");
+  setAttr(path, "fill", "none"); setAttr(path, "stroke", cSignal);
+  setAttr(path, "stroke-width", "2"); setAttr(path, "stroke-linecap", "round"); setAttr(path, "stroke-linejoin", "round");
+  append(svg, path);
+  return svg;
+}
+
+// 品牌链接:logo + 名字做成一个可点锚点,指向首页。
+number brandLink() {
+  number a = create("a");
+  setAttr(a, "href", "./index.html");
+  setStyle(a, "display", "flex"); setStyle(a, "align-items", "center"); setStyle(a, "gap", "10px"); setStyle(a, "text-decoration", "none");
+  append(a, brandMark());
+  number t = create("span");
+  setText(t, "WhenScript");
+  setStyle(t, "font-weight", "700"); setStyle(t, "font-size", "17px"); setStyle(t, "color", cText);
+  append(a, t);
+  return a;
+}
+
+// 代码行:一行等宽、保留缩进的代码(white-space:pre)。col 决定这一行的颜色(注释=幽,:=行=青)。
+number codeLine(string txt, string col) {
+  number d = create("div");
+  setText(d, txt);
+  setStyle(d, "font-family", fMono);
+  setStyle(d, "font-size", "12.5px");
+  setStyle(d, "line-height", "1.75");
+  setStyle(d, "color", col);
+  setStyle(d, "white-space", "pre");
+  return d;
+}
+
+// 目录锚点(左侧 TOC 用):整行可点、左侧一道竖线,悬停变琥珀是全站默认的 a:hover,这里不重复设。
+number tocLink(string label, string href) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  setStyle(a, "display", "block");
+  setStyle(a, "color", cDim);
+  setStyle(a, "font-size", "13.5px");
+  setStyle(a, "padding", "5px 12px");
+  setStyle(a, "border-left", "2px solid " + cLine);
+  setStyle(a, "text-decoration", "none");
+  return a;
+}
+
+// 「在 Playground 打开」小链接(呼应原 docs.html 的 .play-link:青色文字 + 箭头,不是按钮)。
+number playLink(string href) {
+  number a = create("a");
+  setText(a, "在 Playground 打开 ↗");
+  setAttr(a, "href", href);
+  setStyle(a, "display", "inline-block");
+  setStyle(a, "font-size", "13.5px");
+  setStyle(a, "font-weight", "600");
+  setStyle(a, "margin-top", "2px");
+  setStyle(a, "color", cTrace);
+  setStyle(a, "text-decoration", "none");
+  return a;
+}
+
+// ── 居中内容列(对照 index.html 的 .wrap:max-width:1080px; margin:0 auto)────────
+container WrapRow() extends Row {
+  width: fill; maxWidth: "1080px"; margin: "0 auto"; alignItems: "center";
+}
+container WrapCol() extends Column {
+  width: fill; maxWidth: "1080px"; margin: "0 auto";
+}
+
+// ── 代码面板外壳(深底、圆角、描边;可选一条标签栏给多文件示例用)──────────────────
+container CodeBlock() extends Column {
+  bg: cBgDeep; border: "1px solid " + cLine; radius: 12; overflow: "hidden"; marginTop: 18; marginBottom: 10;
+}
+
+// ── 顶部导航(与 landing.when 逐字一致,仅「文档」置为 active)───────────────────
+container NavBar() {
+  bg: cBg; borderBottom: "1px solid " + cLine; position: "sticky"; top: 0; zIndex: "20"; backdropFilter: "blur(10px)";
+  WrapRow {
+    gap: 22; pad: (0, 24); height: 58; flexWrap: "wrap";
+    append(self, brandLink());
+    Row {
+      marginLeft: "auto"; gap: 18; alignItems: "center"; flexWrap: "wrap";
+      append(self, navLink("Playground", "./playground.html", false, false));
+      append(self, navLink("示例", "./examples.html", false, false));
+      append(self, navLink("文档", "./docs.html", true, false));
+      append(self, navLink("联系", "./contact.html", false, false));
+      append(self, navCta("VS Code 扩展", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript"));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
+    }
+  }
+}
+
+// ── 页头:眉标 + 大标题 + 一句话导读 ──────────────────────────────────────────
+container PageHead() extends Header {
+  bg: cBg; pad: (56, 0, 12, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("user manual · 用户手册") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; textTransform: "lowercase"; marginBottom: 16; }
+    Text("用户手册") { size: 46; weight: 900; color: cText; lineHeight: "1.2"; marginBottom: 12; }
+    Text("从类型到工具链,八章讲透整门语言。每段代码都通过了 whenscript check 静态验证;能单文件跑的章节都配了「在 Playground 打开」——当场改、当场看。左侧目录随时跳转。") {
+      size: 16; color: cDim; maxWidth: "44em"; lineHeight: "1.7";
+    }
+  }
+}
+
+// ── 左侧目录(sticky,八个锚点)────────────────────────────────────────────────
+container Toc() extends Aside {
+  position: "sticky"; top: 78; width: "216px"; setStyle(self, "flex", "0 0 216px");
+  setAttr(self, "aria-label", "目录");
+  Column {
+    Text("contents") { font: fMono; size: 11; color: cDim; letterSpacing: "0.16em"; textTransform: "uppercase"; marginBottom: 10; }
+    append(self, tocLink("01 · 基础类型与变量", "#types"));
+    append(self, tocLink("02 · 反应式家族", "#reactive"));
+    append(self, tocLink("03 · event 委托", "#events"));
+    append(self, tocLink("04 · group 实体与 until", "#entity"));
+    append(self, tocLink("05 · 函数与 with", "#functions"));
+    append(self, tocLink("06 · 模块 import / export", "#modules"));
+    append(self, tocLink("07 · 前端容器语法", "#frontend"));
+    append(self, tocLink("08 · 工具链命令", "#toolchain"));
+  }
+}
+
+// ── 01 · 基础类型与变量 ───────────────────────────────────────────────────────
+container Sec01Types() extends Section {
+  id: "types"; marginBottom: 60;
+  Column {
+    Text("01 · types") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("基础类型与变量") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("声明就是「类型 名字 = 值」。number 统一整数与浮点(内部有 int < float < 高精度的精度阶,计算「升-算-降」不打扰你,赋值才是强制点);string 支持 \${...} 插值;group 是数组和哈希表的统一体。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    Text("要精确小数(比如钱),用定点 number<string>,冒号配置位 :2 把结果定标到两位小数。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    CodeBlock {
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("import { print } from \"console\";", cText));
+        append(self, codeLine("number n   = 42;      // 整数与浮点同属 number(精度阶 int < float < 高精度)", cDim));
+        append(self, codeLine("number pi  = 3.14;", cText));
+        append(self, codeLine("string msg = \"Hello\";", cText));
+        append(self, codeLine("bool ok    = true;", cText));
+        append(self, codeLine("group user = [\"name\": \"when\", \"age\": 3];  // group: 数组 + 哈希表的统一体", cDim));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("print(msg, \", \", user[\"name\"], \"!\");", cText));
+        append(self, codeLine("print(\"n * pi = \", n * pi);", cText));
+        append(self, codeLine("print(\"ok = \", ok);", cText));
+      }
+    }
+    append(self, playLink("./playground.html"));
+  }
+}
+
+// ── 02 · 反应式家族 ───────────────────────────────────────────────────────────
+container Sec02Reactive() extends Section {
+  id: "reactive"; marginBottom: 60;
+  Column {
+    Text("02 · reactive") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("反应式家族:when · changed · once · :=") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("四个成员各管一件事:when(cond) 在条件从假变真那一刻触发一次(边沿,不刷屏);changed(x) 每次变化都报,还给你旧值新值;once 一辈子只响一次;b := expr 让 b 持续等于右边,像电子表格的单元格。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    Text("每次写入,引擎先让所有 := 派生收敛到不动点,再判 when——反应体里读到的永远是一致的世界(glitch-free)。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    CodeBlock {
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("import { print } from \"console\";", cText));
+        append(self, codeLine("number count = 0;", cText));
+        append(self, codeLine("number double := count * 2;   // := 持续绑定: count 一变它就变", cTrace));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("when(count == 3) { print(\"到 3 了(when: 条件变真那一下)\"); }", cText));
+        append(self, codeLine("once(count > 4)  { print(\"只响一次(once)\"); }", cText));
+        append(self, codeLine("changed(count) with (old, new) {", cText));
+        append(self, codeLine("  print(\"count \", old, \" -> \", new, \", double = \", double);", cText));
+        append(self, codeLine("}", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("count = 3;", cText));
+        append(self, codeLine("count = 5;", cText));
+        append(self, codeLine("count = 2;", cText));
+        append(self, codeLine("count = 6;   // once 已用掉, 不再响", cDim));
+      }
+    }
+    append(self, playLink("./playground.html"));
+  }
+}
+
+// ── 03 · event 委托 ───────────────────────────────────────────────────────────
+container Sec03Events() extends Section {
+  id: "events"; marginBottom: 60;
+  Column {
+    Text("03 · events") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("event 委托") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("event<T> 声明一根带类型的信号线:emit 往里发,when(事件) with(带类型的参数) 收。事件是一等值——可以当参数传给函数、当返回值带出来、经 import 跨模块共享同一根线。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    CodeBlock {
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("import { print } from \"console\";", cText));
+        append(self, codeLine("event<number, string> onLog;", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("when(onLog) with(number code, string msg) {", cText));
+        append(self, codeLine("  print(\"[\", code, \"] \", msg);", cText));
+        append(self, codeLine("}", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("emit onLog(200, \"OK\");", cText));
+        append(self, codeLine("emit onLog(404, \"Not Found\");", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("// 委托可传递: 把信号线交给函数, 让它来发射", cDim));
+        append(self, codeLine("void worker(event<number, string> report) {", cText));
+        append(self, codeLine("  emit report(500, \"worker 内部出错\");", cText));
+        append(self, codeLine("}", cText));
+        append(self, codeLine("worker(onLog);", cText));
+      }
+    }
+    append(self, playLink("./playground.html"));
+  }
+}
+
+// ── 04 · group 实体与 until ───────────────────────────────────────────────────
+container Sec04Entity() extends Section {
+  id: "entity"; marginBottom: 60;
+  Column {
+    Text("04 · entity") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("group 实体与 until") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("给 group 的花括号体里写上 when/changed,它就成了实体:状态和行为住在一起,不需要 class。delete 名字 一步回收整个实体连同它的全部反应;until(cond) 更进一步——声明生命周期,条件一到,实体自动回收,确定性的,没有垃圾回收器猜。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    CodeBlock {
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("import { print } from \"console\";", cText));
+        append(self, codeLine("bool closed = false;", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("group cart = {", cText));
+        append(self, codeLine("  cart.total = 0;", cText));
+        append(self, codeLine("  changed(cart.total) { print(\"[cart] 总价 \", cart.total); }", cText));
+        append(self, codeLine("  when(cart.total > 100) { print(\"[cart] 包邮解锁!\"); }", cText));
+        append(self, codeLine("} until(closed);", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("cart.total = 40;", cText));
+        append(self, codeLine("cart.total = 120;", cText));
+        append(self, codeLine("closed = true;     // until 边沿 → 实体连同它的反应一起确定性回收", cDim));
+        append(self, codeLine("cart.total = 999;  // 静默: cart 的 when 已随实体回收", cDim));
+      }
+    }
+    append(self, playLink("./playground.html"));
+  }
+}
+
+// ── 05 · 函数与 with ──────────────────────────────────────────────────────────
+container Sec05Functions() extends Section {
+  id: "functions"; marginBottom: 60;
+  Column {
+    Text("05 · functions") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("函数与 with") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("函数声明以返回类型开头:number add(number a, number b) { ... },无返回值用 void。事件处理器的参数有两种写法——with(string m) { ... } 和箭头 (string m) => { ... },完全等价(箭头就是 with 的简写);两种写法的参数都要带类型。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    CodeBlock {
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("import { print } from \"console\";", cText));
+        append(self, codeLine("number add(number a, number b) { return a + b; }", cText));
+        append(self, codeLine("print(\"add(10, 20) = \", add(10, 20));", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("// 事件参数两种写法完全等价: with 与箭头(参数都带类型)", cDim));
+        append(self, codeLine("event<string> onMsg;", cText));
+        append(self, codeLine("when(onMsg) with(string m) { print(\"with 收到: \", m); }", cText));
+        append(self, codeLine("when(onMsg) (string m) => { print(\"箭头收到: \", m); }", cText));
+        append(self, codeLine("emit onMsg(\"hi\");", cText));
+      }
+    }
+    append(self, playLink("./playground.html"));
+  }
+}
+
+// ── 06 · 模块 import / export(非单文件,不配 Playground 链接)────────────────
+container Sec06Modules() extends Section {
+  id: "modules"; marginBottom: 60;
+  Column {
+    Text("06 · modules") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("模块 import / export") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("文件末尾 export { 名字们 }; 列出要暴露的函数、变量、事件;另一个文件 import { ... } from \"./路径.when\"; 拿来用。经 import 共享的同一个 event 跨模块完全互通——这是设计好的共享机制,不是巧合。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    CodeBlock {
+      Text("lib/math.when") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; pad: (8, 16); borderBottom: "1px solid " + cLine; }
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("number square(number n) { return n * n; }", cText));
+        append(self, codeLine("number PI = 3.14159;", cText));
+        append(self, codeLine("export { square, PI };", cText));
+      }
+    }
+    CodeBlock {
+      Text("main.when") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; pad: (8, 16); borderBottom: "1px solid " + cLine; }
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("import { print } from \"console\";", cText));
+        append(self, codeLine("import { square, PI } from \"./lib/math.when\";", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("print(\"square(5) = \", square(5));", cText));
+        append(self, codeLine("print(\"PI = \", PI);", cText));
+      }
+    }
+    Text("多文件示例需要本地 CLI(Playground 是单文件的):把两个文件放好后 whenscript main.when。") {
+      size: 13; color: cDim; marginTop: 2;
+    }
+  }
+}
+
+// ── 07 · 前端容器语法 ─────────────────────────────────────────────────────────
+container Sec07Frontend() extends Section {
+  id: "frontend"; marginBottom: 60;
+  Column {
+    Text("07 · frontend") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("前端容器语法") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("一切皆容器:container 名字() { ... } 声明组件,统一块 { 配置: 值; 子元素 } 既写样式也放孩子。给按钮起个名,when(按钮) 直接就是点击反应;文本里的 \${...} 插值自动跟着数据变——布局就是 := 电路,没有虚拟 DOM。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    CodeBlock {
+      Column {
+        pad: (16, 18); gap: 2;
+        append(self, codeLine("import { Text, Button } from \"dom\";", cText));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("number count  = 0;", cText));
+        append(self, codeLine("number double := count * 2;   // 布局即电路: 值变, 界面自己动", cTrace));
+        append(self, codeLine("", cDim));
+        append(self, codeLine("container App() {", cText));
+        append(self, codeLine("  padding: \"24px\"; fontFamily: \"system-ui, sans-serif\";", cText));
+        append(self, codeLine("  Text(\"count = \${count} · double = \${double}\") { fontSize: \"20px\"; weight: bold }", cText));
+        append(self, codeLine("  add = Button(\"+1\") { padding: \"8px 16px\"; cursor: \"pointer\" }", cText));
+        append(self, codeLine("  when(add) { count = count + 1; }", cText));
+        append(self, codeLine("}", cText));
+        append(self, codeLine("App();", cText));
+      }
+    }
+    append(self, playLink("./playground.html"));
+  }
+}
+
+// ── 08 · 工具链命令(真表格:Table/Thead/Tbody/Tr/Th/Td 直接脱糖成真 <table>)───
+container Sec08Toolchain() extends Section {
+  id: "toolchain";
+  Column {
+    Text("08 · toolchain") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 8; }
+    Text("工具链命令") { size: 26; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("一个 whenscript 二进制,全套工具面。工具面能比执行面报得更多、看得更多,但绝不改执行语义。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 14; lineHeight: "1.7";
+    }
+    Box {
+      overflowX: "auto"; marginTop: 18;
+      Table {
+        width: "100%"; borderCollapse: "collapse"; fontSize: "14px";
+        Thead {
+          Tr {
+            Th {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; textAlign: "left"; verticalAlign: "top";
+              Text("命令") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; }
+            }
+            Th {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; textAlign: "left"; verticalAlign: "top";
+              Text("用途") { font: fMono; size: 11; color: cDim; letterSpacing: "0.12em"; }
+            }
+          }
+        }
+        Tbody {
+          Tr {
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("whenscript <file.when>") { font: fMono; size: 13; color: cSignal; bg: cBgDeep; pad: (2, 8); radius: 6; }
+            }
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("运行程序;语法/语义错在执行前响亮报错,不静默吞。") { size: 14; color: cDim; lineHeight: "1.6"; }
+            }
+          }
+          Tr {
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("whenscript check [--json] <file>") { font: fMono; size: 13; color: cSignal; bg: cBgDeep; pad: (2, 8); radius: 6; }
+            }
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("静态检查(lex → parse → 语义),一次报出全部语义错误,带行列号,不执行。") { size: 14; color: cDim; lineHeight: "1.6"; }
+            }
+          }
+          Tr {
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("whenscript fmt [--write|--check] <file>") { font: fMono; size: 13; color: cSignal; bg: cBgDeep; pad: (2, 8); radius: 6; }
+            }
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("保真格式化:token 流保真、注释一个不丢、幂等;--check 供 CI 用。") { size: 14; color: cDim; lineHeight: "1.6"; }
+            }
+          }
+          Tr {
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("whenscript pkg <install|add|remove|list>") { font: fMono; size: 13; color: cSignal; bg: cBgDeep; pad: (2, 8); radius: 6; }
+            }
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("去中心化包管理:when.json + when.lock + when_modules/,支持 git 与本地路径依赖,无安装脚本。") { size: 14; color: cDim; lineHeight: "1.6"; }
+            }
+          }
+          Tr {
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("whenscript graph <file> [-o out.html]") { font: fMono; size: 13; color: cSignal; bg: cBgDeep; pad: (2, 8); radius: 6; }
+            }
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("导出运行时反应式依赖图的只读快照(交互 HTML,也可 --dot/--json)。") { size: 14; color: cDim; lineHeight: "1.6"; }
+            }
+          }
+          Tr {
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("whenscript repl") { font: fMono; size: 13; color: cSignal; bg: cBgDeep; pad: (2, 8); radius: 6; }
+            }
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("交互式会话,回放式地试语言。") { size: 14; color: cDim; lineHeight: "1.6"; }
+            }
+          }
+          Tr {
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("whenscript lsp") { font: fMono; size: 13; color: cSignal; bg: cBgDeep; pad: (2, 8); radius: 6; }
+            }
+            Td {
+              pad: (11, 14); borderBottom: "1px solid " + cLine; verticalAlign: "top";
+              Text("在 stdio 上说 LSP,供编辑器接入:诊断、悬停中文文档、补全。") { size: 14; color: cDim; lineHeight: "1.6"; }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// ── 正文列:真 <main>,直接装八个真 <section>(块级天然堆叠,不需要额外 flex 列)───
+container DocsMain() extends Main {
+  minWidth: "280px"; setStyle(self, "flex", "1 1 0");
+  Sec01Types()
+  Sec02Reactive()
+  Sec03Events()
+  Sec04Entity()
+  Sec05Functions()
+  Sec06Modules()
+  Sec07Frontend()
+  Sec08Toolchain()
+}
+
+// ── 目录 + 正文双栏 ───────────────────────────────────────────────────────────
+container DocsBody() {
+  bg: cBg; pad: (40, 0, 64, 0);
+  WrapRow {
+    pad: (0, 24); gap: 44; alignItems: "start"; flexWrap: "wrap";
+    Toc()
+    DocsMain()
+  }
+}
+
+// ── 整页 ─────────────────────────────────────────────────────────────────────
+// 注:Footer 直接用内建语义容器(渲染真 <footer>),不能自定义 container Footer()
+// ——Footer/Header/Nav/Section 等是保留的语义元素名,自定义同名容器会被内建悄悄取代。
+container App() {
+  font: fSans; bg: cBg; color: cText;
+  NavBar()
+  PageHead()
+  DocsBody()
+  Footer {
+    bg: cBg; borderTop: "1px solid " + cLine; pad: (32, 0, 44, 0);
+    WrapRow {
+      pad: (0, 24); gap: 20; flexWrap: "wrap"; alignItems: "center";
+      Text("© 2026 WhenScript · 写入,即触发") { color: cDim; size: 13; }
+      Box { width: fill; minWidth: "20px"; }
+      append(self, navLink("联系我们", "./contact.html", false, false));
+      append(self, navLink("VS Code Marketplace", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript", false, true));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
+    }
+  }
+}
+
+setStyle(query("body"), "margin", "0");
+setStyle(query("body"), "padding", "0");
+setStyle(query("body"), "background", cBg);
+App();

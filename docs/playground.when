@@ -1,0 +1,398 @@
+// ══════════════════════════════════════════════════════════════════════════════
+//  WhenScript Playground —— 用 WhenScript 自己写的。
+//
+//  编辑区、行号、语法高亮、滚动同步、运行按钮、示例菜单、输出 —— 整个 playground 就是一段
+//  WhenScript 程序,在你浏览器里由 wasm 引擎实时执行。「反应式语言的 playground 自己也是反应式的」:
+//  改一个值(code),依赖它的一切(高亮层、行号、自动重跑)自己流动。
+//
+//  运行机制:每次运行把源码 toHex 编进 playground-runner.html 的 ?hex= 参数、换 &n= 强制整页重载
+//  → 每次都是一个干净的引擎实例(runner 是纯 infra 沙箱)。父子之间不做跨 frame 消息 —— 父页是
+//  when 写的,只 setAttr(iframe,"src",...) 送源码,runner 在 iframe 内自渲染 app + 控制台输出。
+//
+//  用到的读取原语(2026-07-13 新增):getNum(滚动位置/行高/选区)· setNum(滚动/选区)· preventKeys(Tab)。
+// ══════════════════════════════════════════════════════════════════════════════
+import { create, setText, setAttr, setStyle, append, on, getNum, setNum, preventKeys, urlParam } from "dom";
+import { fetch } from "net";
+import { toHex, substring, len, split, contains, fromBase64, fromBytes, replace } from "strings";
+import { delay } from "timer";
+
+// ── 设计 token(与旧 playground.html 的 :root 逐值一致)────────────────────────────
+string cBg       = "#171426";
+string cPanel    = "#1e1b2e";
+string cBorder   = "#3b3358";
+string cText     = "#ece8f8";
+string cDim      = "#a89fc8";
+string cAccent   = "#ffb454";
+string cEditorBg = "#14111f";
+string cGutterFg = "#55506e";
+string fMono     = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+string fSans     = "system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+
+// ── 语法高亮配色(与旧 playground.html 的 .tok-* 逐值一致)────────────────────────
+string hComment  = "#6f6a8a";
+string hString   = "#89ca78";
+string hNumber   = "#d19a66";
+string hKeyword  = "#c586c0";
+string hReactive = "#6fd9e7";
+string hPascal   = "#e5c07b";
+// 词法分类用的字符集 / 关键字表(前后空格包裹便于整词匹配)
+string wordChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+string upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+string digitChars = "0123456789";
+string reactiveWords = " when changed assigned once until guard with emit event ";
+string keywordWords  = " number string bool group byte bit function return void import export from break each if else while for var switch case default true false unknown before after delete drop copy self turn ";
+
+// ── 反应式状态 ────────────────────────────────────────────────────────────────
+string code       = "";   // 当前编辑区文本(值桥:textarea 输入 → 这里)
+number runNonce    = 0;    // 每次运行 iframe src 的 &n=,强制整页重载
+number debounceGen = 0;    // 防抖:每次改动 +1
+number ticksFired  = 0;    // 防抖:每个 300ms tick 到点 +1;只有追平 debounceGen 的那个 tick 真跑
+
+// ── 示例菜单(标签 → 文件;keyed group,插入序即显示序)──────────────────────────
+group examples = {
+  "⓪ 首页演示 · count 与派生":        "hero.when",
+  "① 计数器 · 派生 + 条件样式":       "counter.when",
+  "② 购物车卡片 · 反应式总价":         "styled.when",
+  "③ 路由切换 · 容器语法":            "switch.when",
+  "④ 霓虹光效 · 图层动效":            "neon.when",
+  "⑤ 富事件 · 鼠标/键盘跟随":         "events.when",
+  "⑥ 动画编排 · WAAPI":              "motion.when",
+  "⑦ 个人博客 · 前端语法综合":        "blog.when",
+  "⑧ 容器蒙版 · 图层合成":           "mask.when",
+  "⑨ 剪贴蒙版 · SVG 裁剪":           "clip.when",
+  "⑩ 瀑布流 · 按实测高度排版":        "masonry.when",
+  "⑪ 感知信号 · 容器宽度响应":        "sensing.when",
+  "⑫ 窗口信号 · 全局尺寸响应":        "window.when",
+  "Flappy 金苹果 · 整个游戏就是一堆 when": "game.when"
+};
+
+// ── 需要句柄的交互元素(手拼 create,便于 setAttr/getNum/setNum/preventKeys)────────
+number codeArea    = create("textarea");
+number resultFrame = create("iframe");
+number selectEl    = create("select");
+number gutterEl    = create("pre");     // 行号栏(不换行,逐行等高,与 textarea 各行对齐)
+number highlightEl = create("pre");     // 语法高亮层(彩色,置于透明 textarea 之下,滚动同步)
+
+// ── 运行:把 code 编进 runner 的 ?hex=,换 &n= 强制重载(每次干净引擎实例)──────────
+void runNow() {
+  runNonce = runNonce + 1;
+  setAttr(resultFrame, "src", "playground-runner.html?hex=" + toHex(code) + "&n=" + runNonce);
+}
+
+// ── 防抖自动重跑(反应式语言的 playground 也该是反应式的)────────────────────────
+event<group> debTick;
+void scheduleRun() {
+  debounceGen = debounceGen + 1;
+  delay(300, debTick);
+}
+when(debTick) {
+  ticksFired = ticksFired + 1;
+  if (ticksFired == debounceGen) { runNow(); }   // 只有"其后没有更新改动"的那个 tick 才真跑
+}
+
+// ── 编辑区输入 → code(值桥)+ 排一次自动重跑 ─────────────────────────────────────
+event<string> codeInput;
+on(codeArea, "input", codeInput);
+when(codeInput) with(string t) {
+  code = t;
+  scheduleRun();
+}
+
+// ── 载入示例:fetch .when 文件 → 填进编辑区 → 立即跑 ───────────────────────────────
+event<group> exResp;
+void loadExample(string file) {
+  fetch(file, exResp);
+}
+when(exResp) with(group r) {
+  code = r.body;
+  setAttr(codeArea, "value", code);
+  runNow();
+}
+
+// ── 示例下拉切换 ─────────────────────────────────────────────────────────────
+event<string> exPick;
+on(selectEl, "change", exPick);
+when(exPick) with(string file) {
+  loadExample(file);
+}
+
+// ── 运行按钮点击 ─────────────────────────────────────────────────────────────
+event<group> runClick;
+when(runClick) { runNow(); }
+
+// ── 行号栏:code 变 → 重建 "1\n2\n…\nN"(pre + 同行高 → 与 textarea 各行对齐)──────────
+void rebuildGutter() {
+  group lines = split(code, "\n");
+  string g = "";
+  each(lines) with(idx, line) {           // 核心 each 双参:idx=行下标、line=该行(idx 是行号 - 1)
+    if (idx > 0) { g = g + "\n"; }
+    g = g + (idx + 1);
+  }
+  setText(gutterEl, g);
+}
+// ── 语法高亮:逐行字符扫描 → 彩色 span(全用 setText 建节点 = 文本永不当 HTML 解释,不碰 innerHTML/XSS)──
+void emitSpan(number parent, string text, string color) {
+  if (len(text) == 0) { return; }
+  number s = create("span");
+  setText(s, text);
+  if (len(color) > 0) { setStyle(s, "color", color); }
+  append(parent, s);
+}
+// 冲刷一个整词,按类别上色:数字 / 反应式关键字 / 普通关键字 / PascalCase 容器名 / 其它(原色)
+void flushWord(number parent, string word) {
+  if (len(word) == 0) { return; }
+  string first = substring(word, 0, 1);
+  if (contains(digitChars, first)) { emitSpan(parent, word, hNumber); }
+  else if (contains(reactiveWords, " " + word + " ")) { emitSpan(parent, word, hReactive); }
+  else if (contains(keywordWords, " " + word + " ")) { emitSpan(parent, word, hKeyword); }
+  else if (contains(upperChars, first)) { emitSpan(parent, word, hPascal); }
+  else { emitSpan(parent, word, ""); }
+}
+// 把一行切成彩色 span 追加进 block:处理 // 行注释、"字符串"(带 \ 转义)、整词、标点/空白
+void hlLine(number block, string line) {
+  number n = len(line);
+  number i = 0;
+  string word = "";
+  while (i < n) {
+    string ch = substring(line, i, i + 1);
+    if (ch == "/" && i + 1 < n && substring(line, i + 1, i + 2) == "/") {
+      flushWord(block, word); word = "";
+      emitSpan(block, substring(line, i, n), hComment);   // // 到行尾 = 注释
+      i = n;
+    } else if (ch == "\"") {
+      flushWord(block, word); word = "";
+      number j = i + 1;
+      string str = "\"";
+      number done = 0;
+      while (j < n && done == 0) {
+        string c2 = substring(line, j, j + 1);
+        if (c2 == "\\" && j + 1 < n) { str = str + c2 + substring(line, j + 1, j + 2); j = j + 2; }
+        else if (c2 == "\"") { str = str + c2; done = 1; j = j + 1; }
+        else { str = str + c2; j = j + 1; }
+      }
+      emitSpan(block, str, hString);
+      i = j;
+    } else if (contains(wordChars, ch)) {
+      word = word + ch;
+      i = i + 1;
+    } else {
+      flushWord(block, word); word = "";
+      emitSpan(block, ch, "");   // 标点/空白 = 原色
+      i = i + 1;
+    }
+  }
+  flushWord(block, word);
+}
+// 重建高亮层:清空 → 逐行一个 block(display:block,空行也占一行)→ 该行彩色 span
+void rebuildHighlight() {
+  setText(highlightEl, "");   // textContent="" 清掉所有旧子节点
+  group lines = split(code, "\n");
+  each(lines) with(line) {
+    number block = create("div");
+    setStyle(block, "display", "block"); setStyle(block, "min-height", "1.55em");
+    hlLine(block, line);
+    append(highlightEl, block);
+  }
+}
+changed(code) { rebuildGutter(); rebuildHighlight(); }   // code 一变,行号 + 高亮跟随(无 vDOM,谁变刷谁)
+
+// ── 滚动同步:textarea 上下滚 → 行号栏跟随(读 scrollTop 写 scrollTop = 新增的读/写原语)──
+event<group> scrollEv;
+on(codeArea, "scroll", scrollEv);
+when(scrollEv) {
+  number st = getNum(codeArea, "scrollTop");
+  number sl = getNum(codeArea, "scrollLeft");
+  setNum(gutterEl, "scrollTop", st);      // 行号栏竖向跟随
+  setNum(highlightEl, "scrollTop", st);   // 高亮层竖向 + 横向跟随(逐像素与 textarea 重合)
+  setNum(highlightEl, "scrollLeft", sl);
+}
+
+// ── Tab 键:插入两个空格、不跳出文本框(preventKeys 阻止默认 + 选区读写还原光标)──────────
+preventKeys(codeArea, [ "Tab" ]);
+event<group> keyEv;
+on(codeArea, "keydown", keyEv);
+when(keyEv) with(group k) {
+  if (k.key == "Tab") {
+    number s = getNum(codeArea, "selectionStart");
+    number e = getNum(codeArea, "selectionEnd");
+    code = substring(code, 0, s) + "  " + substring(code, e, len(code));
+    setAttr(codeArea, "value", code);
+    setNum(codeArea, "selectionStart", s + 2);
+    setNum(codeArea, "selectionEnd", s + 2);
+    scheduleRun();
+  }
+}
+
+// ── 品牌方波 logo(真 <svg>,与官网各页逐点一致)────────────────────────────────
+number brandMark() {
+  number svg = create("svg");
+  setAttr(svg, "width", "20"); setAttr(svg, "height", "20"); setAttr(svg, "viewBox", "0 0 26 26");
+  number rect = create("rect");
+  setAttr(rect, "width", "26"); setAttr(rect, "height", "26"); setAttr(rect, "rx", "6"); setAttr(rect, "fill", cBg);
+  append(svg, rect);
+  number path = create("path");
+  setAttr(path, "d", "M4 17 H8 V9 H13 V17 H18 V9 H22");
+  setAttr(path, "fill", "none"); setAttr(path, "stroke", cAccent);
+  setAttr(path, "stroke-width", "2"); setAttr(path, "stroke-linecap", "round"); setAttr(path, "stroke-linejoin", "round");
+  append(svg, path);
+  return svg;
+}
+
+// ── 顶栏(Header 是保留元素名,函数命名 buildHeader)────────────────────────────
+number buildHeader() {
+  number bar = create("header");
+  setStyle(bar, "display", "flex"); setStyle(bar, "align-items", "center"); setStyle(bar, "gap", "14px");
+  setStyle(bar, "padding", "10px 18px"); setStyle(bar, "border-bottom", "1px solid " + cBorder);
+  setStyle(bar, "background", cPanel); setStyle(bar, "flex", "0 0 auto");
+
+  number brand = create("a");
+  setAttr(brand, "href", "./index.html"); setAttr(brand, "title", "回 WhenScript 官网");
+  setStyle(brand, "display", "flex"); setStyle(brand, "align-items", "center"); setStyle(brand, "gap", "8px");
+  setStyle(brand, "text-decoration", "none"); setStyle(brand, "color", cText);
+  setStyle(brand, "font-weight", "700"); setStyle(brand, "font-size", "14px"); setStyle(brand, "white-space", "nowrap");
+  append(brand, brandMark());
+  number bname = create("span"); setText(bname, "WhenScript"); append(brand, bname);
+  append(bar, brand);
+
+  number h1 = create("h1"); setText(h1, "Playground");
+  setStyle(h1, "font-size", "15px"); setStyle(h1, "font-weight", "600"); setStyle(h1, "margin", "0"); setStyle(h1, "white-space", "nowrap");
+  append(bar, h1);
+
+  number tag = create("span"); setText(tag, "改一个值,界面自己动 —— 反应式引擎的 30 秒试玩");
+  setStyle(tag, "font-size", "12px"); setStyle(tag, "color", cDim); setStyle(tag, "white-space", "nowrap");
+  append(bar, tag);
+
+  number gallery = create("a"); setText(gallery, "示例画廊");
+  setAttr(gallery, "href", "./examples.html");
+  setStyle(gallery, "font-size", "12px"); setStyle(gallery, "color", cDim); setStyle(gallery, "text-decoration", "none"); setStyle(gallery, "white-space", "nowrap");
+  append(bar, gallery);
+
+  number spacer = create("div"); setStyle(spacer, "flex", "1 1 auto"); append(bar, spacer);
+
+  setStyle(selectEl, "font", "inherit"); setStyle(selectEl, "font-size", "13px");
+  setStyle(selectEl, "background", "#262138"); setStyle(selectEl, "color", cText);
+  setStyle(selectEl, "border", "1px solid " + cBorder); setStyle(selectEl, "border-radius", "6px");
+  setStyle(selectEl, "padding", "6px 10px"); setStyle(selectEl, "cursor", "pointer");
+  each(examples) with(label, file) {
+    number opt = create("option");
+    setAttr(opt, "value", file);
+    setText(opt, label);
+    append(selectEl, opt);
+  }
+  append(bar, selectEl);
+
+  number runBtn = create("button"); setText(runBtn, "▶ 运行");
+  setStyle(runBtn, "font", "inherit"); setStyle(runBtn, "font-size", "13px"); setStyle(runBtn, "font-weight", "700");
+  setStyle(runBtn, "background", cAccent); setStyle(runBtn, "color", "#241c0a");
+  setStyle(runBtn, "border", "1px solid " + cAccent); setStyle(runBtn, "border-radius", "6px");
+  setStyle(runBtn, "padding", "6px 12px"); setStyle(runBtn, "cursor", "pointer");
+  on(runBtn, "click", runClick);
+  append(bar, runBtn);
+
+  return bar;
+}
+
+// ── 编辑区(左栏):Tier A 先纯 textarea,高亮/行号后续加 ──────────────────────────
+number buildEditorPane() {
+  number pane = create("section");
+  setStyle(pane, "flex", "1 1 50%"); setStyle(pane, "min-width", "0"); setStyle(pane, "min-height", "0");
+  setStyle(pane, "display", "flex"); setStyle(pane, "flex-direction", "column");
+
+  number lbl = create("div"); setText(lbl, "代码 · 改了 300ms 后自动重跑");
+  setStyle(lbl, "flex", "0 0 auto"); setStyle(lbl, "font-size", "11px"); setStyle(lbl, "color", cDim);
+  setStyle(lbl, "letter-spacing", "0.06em"); setStyle(lbl, "text-transform", "uppercase");
+  setStyle(lbl, "padding", "6px 12px"); setStyle(lbl, "border-bottom", "1px solid " + cBorder); setStyle(lbl, "background", cPanel);
+  append(pane, lbl);
+
+  // 编辑区 = 行号栏 + textarea(横排)。不换行(white-space:pre),每逻辑行=一行等高,行号天然对齐。
+  number wrap = create("div");
+  setStyle(wrap, "flex", "1 1 auto"); setStyle(wrap, "min-height", "0"); setStyle(wrap, "min-width", "0");
+  setStyle(wrap, "display", "flex"); setStyle(wrap, "flex-direction", "row");
+  setStyle(wrap, "background", cEditorBg); setStyle(wrap, "overflow", "hidden");
+
+  // 行号栏:与 textarea 同字体/行高/上内边距 → 逐行对齐;自身不滚动,滚动由 textarea 同步过来。
+  setStyle(gutterEl, "flex", "0 0 auto"); setStyle(gutterEl, "margin", "0"); setStyle(gutterEl, "overflow", "hidden");
+  setStyle(gutterEl, "padding", "14px 10px 14px 14px"); setStyle(gutterEl, "text-align", "right");
+  setStyle(gutterEl, "color", cGutterFg); setStyle(gutterEl, "background", cBg);
+  setStyle(gutterEl, "border-right", "1px solid " + cBorder);
+  setStyle(gutterEl, "font", "13px/1.55 " + fMono); setStyle(gutterEl, "white-space", "pre"); setStyle(gutterEl, "user-select", "none");
+  append(wrap, gutterEl);
+
+  // 滚动区(相对定位):高亮层(彩色,底)+ textarea(透明文字,顶,接收输入/caret)两层完全重合。
+  number scrollArea = create("div");
+  setStyle(scrollArea, "position", "relative"); setStyle(scrollArea, "flex", "1 1 auto");
+  setStyle(scrollArea, "min-width", "0"); setStyle(scrollArea, "min-height", "0"); setStyle(scrollArea, "overflow", "hidden");
+
+  // 高亮层:与 textarea 逐像素同框(inset 0 + 同 padding/font),不接收指针,自身不滚动(由同步驱动)。
+  setStyle(highlightEl, "position", "absolute"); setStyle(highlightEl, "top", "0"); setStyle(highlightEl, "left", "0");
+  setStyle(highlightEl, "right", "0"); setStyle(highlightEl, "bottom", "0"); setStyle(highlightEl, "margin", "0");
+  setStyle(highlightEl, "padding", "14px 16px"); setStyle(highlightEl, "overflow", "hidden");
+  setStyle(highlightEl, "font", "13px/1.55 " + fMono); setStyle(highlightEl, "white-space", "pre");
+  setStyle(highlightEl, "color", cText); setStyle(highlightEl, "pointer-events", "none");
+  append(scrollArea, highlightEl);
+
+  // textarea:文字透明(只留 caret 可见)→ 底下高亮层透出;真正的输入/选区/滚动都在它身上。
+  setStyle(codeArea, "position", "absolute"); setStyle(codeArea, "top", "0"); setStyle(codeArea, "left", "0");
+  setStyle(codeArea, "right", "0"); setStyle(codeArea, "bottom", "0"); setStyle(codeArea, "margin", "0");
+  setStyle(codeArea, "border", "none"); setStyle(codeArea, "resize", "none");
+  setStyle(codeArea, "padding", "14px 16px"); setStyle(codeArea, "overflow", "auto");
+  setStyle(codeArea, "background", "transparent"); setStyle(codeArea, "color", "transparent"); setStyle(codeArea, "caret-color", cAccent);
+  setStyle(codeArea, "font", "13px/1.55 " + fMono); setStyle(codeArea, "tab-size", "2");
+  setStyle(codeArea, "white-space", "pre"); setStyle(codeArea, "outline", "none"); setStyle(codeArea, "z-index", "1");
+  setAttr(codeArea, "spellcheck", "false"); setAttr(codeArea, "autocapitalize", "off"); setAttr(codeArea, "autocomplete", "off");
+  append(scrollArea, codeArea);
+
+  append(wrap, scrollArea);
+  append(pane, wrap);
+  return pane;
+}
+
+// ── 结果区(右栏):iframe(runner 在里面自渲染 app + 输出条)──────────────────────
+number buildResultPane() {
+  number pane = create("section");
+  setStyle(pane, "flex", "1 1 50%"); setStyle(pane, "min-width", "0"); setStyle(pane, "min-height", "0");
+  setStyle(pane, "display", "flex"); setStyle(pane, "flex-direction", "column");
+  setStyle(pane, "border-left", "1px solid " + cBorder);
+
+  number lbl = create("div"); setText(lbl, "运行结果");
+  setStyle(lbl, "flex", "0 0 auto"); setStyle(lbl, "font-size", "11px"); setStyle(lbl, "color", cDim);
+  setStyle(lbl, "letter-spacing", "0.06em"); setStyle(lbl, "text-transform", "uppercase");
+  setStyle(lbl, "padding", "6px 12px"); setStyle(lbl, "border-bottom", "1px solid " + cBorder); setStyle(lbl, "background", cPanel);
+  append(pane, lbl);
+
+  setStyle(resultFrame, "flex", "1 1 auto"); setStyle(resultFrame, "min-height", "0");
+  setStyle(resultFrame, "width", "100%"); setStyle(resultFrame, "border", "none"); setStyle(resultFrame, "background", "#fff");
+  setAttr(resultFrame, "title", "WhenScript 运行结果");
+  append(pane, resultFrame);
+
+  return pane;
+}
+
+// ── 组装整页(root 由 host_create 挂到 body)──────────────────────────────────────
+number root = create("div");
+setStyle(root, "height", "100vh"); setStyle(root, "display", "flex"); setStyle(root, "flex-direction", "column");
+setStyle(root, "background", cBg); setStyle(root, "color", cText); setStyle(root, "font-family", fSans);
+append(root, buildHeader());
+
+number main = create("main");
+setStyle(main, "flex", "1 1 auto"); setStyle(main, "min-height", "0"); setStyle(main, "display", "flex"); setStyle(main, "flex-direction", "row");
+append(main, buildEditorPane());
+append(main, buildResultPane());
+append(root, main);
+
+// ── 进场路由:?src=<base64url 源码>(文档/示例页「在 Playground 打开」)> ?example=<文件名> > 默认 ──
+rebuildGutter();
+rebuildHighlight();
+string srcParam = urlParam("src");
+string exParam  = urlParam("example");
+if (len(srcParam) > 0) {
+  // base64url → 标准 base64(-_→+/)→ 解成字节 → UTF-8 字符串
+  code = fromBytes(fromBase64(replace(replace(srcParam, "-", "+"), "_", "/")));
+  setAttr(codeArea, "value", code);
+  runNow();
+} else if (len(exParam) > 0) {
+  setAttr(selectEl, "value", exParam);
+  loadExample(exParam);
+} else {
+  loadExample("hero.when");
+}

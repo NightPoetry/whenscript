@@ -1,0 +1,830 @@
+// ══════════════════════════════════════════════════════════════════════════════
+//  WhenScript 示例画廊 —— 用 WhenScript 自己写的。
+//
+//  浏览器端 .when 不能互相 import(host.js 的 boot() 只接一份完整源码字符串),所以这份文件
+//  自包含:设计 token / 导航栏 / 页脚都是从 landing.when 原样搬过来的(颜色值逐字一致,
+//  这是全站视觉统一的唯一保证)。写法同样全部来自现有 .when 范例:container 容器语法 +
+//  create/setAttr/setStyle/append 手拼真实 DOM/SVG。
+//
+//  页面分两块:
+//   #features —— 语言核心:十个最小可跑片段(模拟控制台样式),代码/输出都是从引擎真实跑出来的
+//                 结果誊抄的(这一页本身不重新执行它们——真正会跑的地方是点开 Playground 之后)。
+//   #showcase —— 前端展示:一张头牌横幅(blog.when)+ 十张卡片,链接到 Playground 的
+//                 ?example=xxx.when 深链。
+//
+//  ★ neon.when 原本在 examples.html 里是一张「活演示」卡:用 fetch 拿源码、建 iframe、
+//  postMessage 把源码喂给 playground-runner.html 实时跑。核对过 dom 模块(Rust/src/core/web/dom.rs)
+//  和 host.js 的全部 host_* 桥接后确认:没有 postMessage 桥接原语(全仓库 grep 零命中),
+//  dom.on() 能挂 "load" 但引擎侧没有办法主动 postMessage 进 iframe——这条活演示链路在当前
+//  运行时原语下无法复现。按任务约定的判断:这不值得为一张卡片新开一个内核工程(违反「该不该动
+//  内核」硬门里的"特性特例"红线),所以把这张卡降级成和其余展示卡片完全一样的静态卡片
+//  (缩略图 + 标题 + 说明 + 「在 Playground 打开」链接),折进 #showcase 的网格里。
+// ══════════════════════════════════════════════════════════════════════════════
+import { create, setAttr, setStyle, setText, append, query, Text } from "dom";
+
+// ── 设计 token(与 landing.when / index.html 的 :root 变量逐值一致)──────────────
+string cBg     = "#1e1b2e";   // --bg
+string cBgDeep = "#171426";   // --bg-deep
+string cPanel  = "#26213c";   // --panel
+string cLine   = "#3b3358";   // --line
+string cText   = "#ece8f8";   // --text
+string cDim    = "#a89fc8";   // --dim
+string cSignal = "#ffb454";   // --signal 琥珀
+string cTrace  = "#6fd9e7";   // --trace  青
+string cArrow  = "#ff5fa2";   // --arrow  粉
+string cOk     = "#89ca78";   // --ok
+string cTerm   = "#14111f";   // --term(本页专属:模拟控制台/live 卡片的深色壳,比 bg-deep 更沉)
+string fMono   = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+string fSans   = "system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+
+// ── 手拼 DOM 原语(与 landing.when 逐字一致)──────────────────────────────────
+number navLink(string label, string href, bool active, bool external) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  if (external) { setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener"); }
+  setStyle(a, "font-size", "14px");
+  setStyle(a, "font-weight", "500");
+  setStyle(a, "text-decoration", "none");
+  setStyle(a, "padding", "4px 2px");
+  setStyle(a, "border-bottom", "2px solid transparent");
+  if (active) {
+    setStyle(a, "color", cText);
+    setStyle(a, "border-bottom", "2px solid " + cSignal);
+  } else {
+    setStyle(a, "color", cDim);
+  }
+  return a;
+}
+
+number navCta(string label, string href) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href); setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener");
+  setStyle(a, "color", cSignal); setStyle(a, "font-size", "14px"); setStyle(a, "font-weight", "600"); setStyle(a, "text-decoration", "none");
+  return a;
+}
+
+number ctaLink(string label, string href, bool primary) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  setStyle(a, "display", "inline-block");
+  setStyle(a, "padding", "12px 22px");
+  setStyle(a, "border-radius", "10px");
+  setStyle(a, "font-size", "15px");
+  setStyle(a, "font-weight", "600");
+  setStyle(a, "text-decoration", "none");
+  if (primary) {
+    setStyle(a, "background", cSignal);
+    setStyle(a, "color", "#241c0a");
+    setStyle(a, "border", "1px solid " + cSignal);
+  } else {
+    setStyle(a, "background", "transparent");
+    setStyle(a, "color", cText);
+    setStyle(a, "border", "1px solid " + cLine);
+  }
+  return a;
+}
+
+number brandMark() {
+  number svg = create("svg");
+  setAttr(svg, "width", "26"); setAttr(svg, "height", "26"); setAttr(svg, "viewBox", "0 0 26 26");
+  number rect = create("rect");
+  setAttr(rect, "width", "26"); setAttr(rect, "height", "26"); setAttr(rect, "rx", "6"); setAttr(rect, "fill", cBgDeep);
+  append(svg, rect);
+  number path = create("path");
+  setAttr(path, "d", "M4 17 H8 V9 H13 V17 H18 V9 H22");
+  setAttr(path, "fill", "none"); setAttr(path, "stroke", cSignal);
+  setAttr(path, "stroke-width", "2"); setAttr(path, "stroke-linecap", "round"); setAttr(path, "stroke-linejoin", "round");
+  append(svg, path);
+  return svg;
+}
+
+number brandLink() {
+  number a = create("a");
+  setAttr(a, "href", "./index.html");
+  setStyle(a, "display", "flex"); setStyle(a, "align-items", "center"); setStyle(a, "gap", "10px"); setStyle(a, "text-decoration", "none");
+  append(a, brandMark());
+  number t = create("span");
+  setText(t, "WhenScript");
+  setStyle(t, "font-weight", "700"); setStyle(t, "font-size", "17px"); setStyle(t, "color", cText);
+  append(a, t);
+  return a;
+}
+
+// 代码行:一行等宽、保留缩进的代码(white-space:pre)。col 决定这一行的颜色(默认 cText,
+// 注释 cDim,含 := 的反应式派生行 cTrace)—— 与 landing.when 逐字一致,复用做「输出」行同款底色。
+number codeLine(string txt, string col) {
+  number d = create("div");
+  setText(d, txt);
+  setStyle(d, "font-family", fMono);
+  setStyle(d, "font-size", "12.5px");
+  setStyle(d, "line-height", "1.75");
+  setStyle(d, "color", col);
+  setStyle(d, "white-space", "pre");
+  return d;
+}
+
+// ★ 引擎坑(本页开发时发现,未见文档记载):`each(group) with(key, value)` 双参数形式,直接写在
+// container 语句体里会静默失效——两个绑定变量在 body 内读出来全是 unknown(SSR 输出可见
+// 一整块 "unknown" 文本/"color:unknown")。单参数 `with(value)` 形式在 container 体里没问题
+// (blog.when/masonry.when 的 each 都是单参数,没踩到这个坑)。用 whenscript ssr 跑最小复现
+// 确认:同一个双参数 each 挪进普通 number 函数体(不在 container 语句体里)就完全正常。这是
+// 页面内容任务,不是改内核的场合(该不该动内核硬门:值不值得为一张页面开一次内核工程),所以
+// 这里绕开——双参数 each 一律搬进下面这两个普通函数,container 体内只 append 调用结果。
+number appendCodeLines(number parent, group lines, group colors) {
+  each(lines) with(idx, line) { append(parent, codeLine(line, colors[idx])); }
+  return parent;
+}
+number appendOutLines(number parent, group outs) {
+  each(outs) with(idx, line) { append(parent, codeLine("› " + line, cOk)); }
+  return parent;
+}
+
+// jump-row 的胶囊小链接(页头两个锚点:跳 #features / #showcase)。
+number jumpLink(string label, string href) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  setStyle(a, "font-family", fMono); setStyle(a, "font-size", "12px"); setStyle(a, "letter-spacing", "0.06em");
+  setStyle(a, "color", cDim); setStyle(a, "border", "1px solid " + cLine); setStyle(a, "border-radius", "999px");
+  setStyle(a, "padding", "8px 14px"); setStyle(a, "background", cBgDeep); setStyle(a, "text-decoration", "none");
+  return a;
+}
+
+// 模拟控制台卡头里那个「▶ 在 Playground 跑」小按钮(靠右对齐)。
+number playRunLink(string href) {
+  number a = create("a");
+  setText(a, "▶ 在 Playground 跑");
+  setAttr(a, "href", href);
+  setStyle(a, "margin-left", "auto"); setStyle(a, "font-family", fMono); setStyle(a, "font-size", "11px");
+  setStyle(a, "font-weight", "700"); setStyle(a, "color", cSignal); setStyle(a, "border", "1px solid " + cLine);
+  setStyle(a, "border-radius", "6px"); setStyle(a, "padding", "5px 9px"); setStyle(a, "text-decoration", "none");
+  setStyle(a, "white-space", "nowrap");
+  return a;
+}
+
+// ── 居中内容列(对照 index.html 的 .wrap:max-width:1080px; margin:0 auto)────────
+container WrapRow() extends Row {
+  width: fill; maxWidth: "1080px"; margin: "0 auto"; alignItems: "center";
+}
+container WrapCol() extends Column {
+  width: fill; maxWidth: "1080px"; margin: "0 auto";
+}
+
+// ── 顶部导航(与 landing.when 逐字一致,只把「示例」的 active 改成 true)───────────
+container NavBar() {
+  bg: cBg; borderBottom: "1px solid " + cLine; position: "sticky"; top: 0; zIndex: "20"; backdropFilter: "blur(10px)";
+  WrapRow {
+    gap: 22; pad: (0, 24); height: 58; flexWrap: "wrap";
+    append(self, brandLink());
+    Row {
+      marginLeft: "auto"; gap: 18; alignItems: "center"; flexWrap: "wrap";
+      append(self, navLink("Playground", "./playground.html", false, false));
+      append(self, navLink("示例", "./examples.html", true, false));
+      append(self, navLink("文档", "./docs.html", false, false));
+      append(self, navLink("联系", "./contact.html", false, false));
+      append(self, navCta("VS Code 扩展", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript"));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
+    }
+  }
+}
+
+// 方波分割线(与 landing.when 逐字一致):两个板块之间的信号方波,持续向左滚动。
+number waveDivider() {
+  number svg = create("svg");
+  setAttr(svg, "viewBox", "0 0 1200 24"); setAttr(svg, "preserveAspectRatio", "none");
+  setStyle(svg, "display", "block"); setStyle(svg, "width", "100%"); setStyle(svg, "height", "24px"); setStyle(svg, "opacity", "0.5");
+
+  number defs = create("defs");
+  append(svg, defs);
+  number pattern = create("pattern");
+  setAttr(pattern, "id", "waveTile");
+  setAttr(pattern, "width", "60"); setAttr(pattern, "height", "24"); setAttr(pattern, "patternUnits", "userSpaceOnUse");
+  append(defs, pattern);
+  number tile = create("path");
+  setAttr(tile, "d", "M0 18 H30 V6 H60");
+  setAttr(tile, "fill", "none"); setAttr(tile, "stroke", cSignal); setAttr(tile, "stroke-width", "1.5");
+  append(pattern, tile);
+
+  number rect = create("rect");
+  setAttr(rect, "x", "0"); setAttr(rect, "y", "0"); setAttr(rect, "width", "200%"); setAttr(rect, "height", "24");
+  setAttr(rect, "fill", "url(#waveTile)");
+  append(svg, rect);
+
+  return svg;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  缩略图专用最小 SVG 图元 helper —— 坐标/尺寸一律按字符串传(直接对应 setAttr 的字符串
+//  参数,不做数值转换)。每个 helper 只管最常见的必填属性,其余(rx/opacity/stroke-dasharray
+//  之类)由调用处拿着返回的元素 id 继续 setAttr 补,避免为每种变体都写一个新 helper。
+// ══════════════════════════════════════════════════════════════════════════════
+number thumbSvg() {
+  number svg = create("svg");
+  setAttr(svg, "viewBox", "0 0 120 60");
+  setAttr(svg, "preserveAspectRatio", "xMidYMid meet");
+  return svg;
+}
+number svgRect(number parent, string x, string y, string w, string h, string fill) {
+  number r = create("rect");
+  setAttr(r, "x", x); setAttr(r, "y", y); setAttr(r, "width", w); setAttr(r, "height", h); setAttr(r, "fill", fill);
+  append(parent, r);
+  return r;
+}
+number svgBg(number parent, string fill) {
+  return svgRect(parent, "0", "0", "120", "60", fill);
+}
+number svgCircle(number parent, string cx, string cy, string r, string fill) {
+  number c = create("circle");
+  setAttr(c, "cx", cx); setAttr(c, "cy", cy); setAttr(c, "r", r); setAttr(c, "fill", fill);
+  append(parent, c);
+  return c;
+}
+number svgPath(number parent, string d, string fill, string stroke, string sw) {
+  number p = create("path");
+  setAttr(p, "d", d); setAttr(p, "fill", fill);
+  if (stroke != "") { setAttr(p, "stroke", stroke); setAttr(p, "stroke-width", sw); }
+  append(parent, p);
+  return p;
+}
+number svgText(number parent, string x, string y, string content, string size, string fill) {
+  number t = create("text");
+  setAttr(t, "x", x); setAttr(t, "y", y); setAttr(t, "font-size", size); setAttr(t, "fill", fill);
+  setAttr(t, "text-anchor", "middle"); setAttr(t, "font-family", "monospace"); setAttr(t, "font-weight", "900");
+  setText(t, content);
+  append(parent, t);
+  return t;
+}
+
+// ── 十张展示卡片的缩略图(照抄 examples.html 里每张卡片内嵌的手绘 SVG,坐标/颜色逐点一致)──
+
+number thumbGame() {
+  number svg = thumbSvg();
+  svgBg(svg, "#0e1630");
+  svgRect(svg, "22", "0", "16", "20", "#2f7d4f");
+  svgRect(svg, "22", "40", "16", "20", "#2f7d4f");
+  svgRect(svg, "82", "0", "16", "14", "#2f7d4f");
+  svgRect(svg, "82", "34", "16", "26", "#2f7d4f");
+  svgCircle(svg, "60", "30", "7", "#ffb454");
+  svgPath(svg, "M60 23 q3 -4 6 -2", "none", "#89ca78", "2");
+  return svg;
+}
+
+number thumbMask() {
+  number svg = thumbSvg();
+  number defs = create("defs"); append(svg, defs);
+  number grad = create("linearGradient");
+  setAttr(grad, "id", "mg"); setAttr(grad, "x1", "0"); setAttr(grad, "y1", "0"); setAttr(grad, "x2", "1"); setAttr(grad, "y2", "1");
+  append(defs, grad);
+  number s1 = create("stop"); setAttr(s1, "offset", "0"); setAttr(s1, "stop-color", "#6fd9e7"); append(grad, s1);
+  number s2 = create("stop"); setAttr(s2, "offset", "1"); setAttr(s2, "stop-color", "#ff5fa2"); append(grad, s2);
+  number mask = create("mask"); setAttr(mask, "id", "mm"); append(defs, mask);
+  svgText(mask, "60", "42", "W", "34", "#fff");
+  svgBg(svg, "#14111f");
+  number panel = svgRect(svg, "10", "6", "100", "48", "url(#mg)");
+  setAttr(panel, "mask", "url(#mm)");
+  return svg;
+}
+
+number thumbMotion() {
+  number svg = thumbSvg();
+  svgBg(svg, "#1a1530");
+  svgCircle(svg, "24", "46", "6", "#6fd9e7");
+  svgCircle(svg, "48", "34", "6", "#ffb454");
+  svgCircle(svg, "72", "24", "6", "#ff5fa2");
+  svgCircle(svg, "96", "16", "6", "#89ca78");
+  number path = svgPath(svg, "M24 46 Q48 10 96 16", "none", "#a89fc8", "1.5");
+  setAttr(path, "opacity", ".5"); setAttr(path, "stroke-dasharray", "3 3");
+  return svg;
+}
+
+number thumbClip() {
+  number svg = thumbSvg();
+  number defs = create("defs"); append(svg, defs);
+  number cp = create("clipPath"); setAttr(cp, "id", "cs"); append(defs, cp);
+  number poly1 = create("polygon");
+  setAttr(poly1, "points", "60,6 71,34 100,34 76,50 84,54 60,42 36,54 44,50 20,34 49,34");
+  append(cp, poly1);
+  svgBg(svg, "#0f172a");
+  number poly2 = create("polygon");
+  setAttr(poly2, "points", "60,6 71,34 100,34 76,50 84,54 60,42 36,54 44,50 20,34 49,34");
+  setAttr(poly2, "fill", "#1e293b");
+  append(svg, poly2);
+  number g = create("g"); setAttr(g, "clip-path", "url(#cs)"); append(svg, g);
+  svgRect(g, "0", "0", "120", "60", "#6fd9e7");
+  svgRect(g, "0", "30", "120", "30", "#ff5fa2");
+  return svg;
+}
+
+number thumbMasonry() {
+  number svg = thumbSvg();
+  svgBg(svg, "#171426");
+  number a1 = svgRect(svg, "8", "8", "32", "20", "#6fd9e7"); setAttr(a1, "rx", "3"); setAttr(a1, "opacity", ".85");
+  number a2 = svgRect(svg, "8", "32", "32", "20", "#6fd9e7"); setAttr(a2, "rx", "3"); setAttr(a2, "opacity", ".5");
+  number b1 = svgRect(svg, "44", "8", "32", "34", "#ffb454"); setAttr(b1, "rx", "3"); setAttr(b1, "opacity", ".85");
+  number b2 = svgRect(svg, "44", "46", "32", "8", "#ffb454"); setAttr(b2, "rx", "3"); setAttr(b2, "opacity", ".5");
+  number c1 = svgRect(svg, "80", "8", "32", "14", "#ff5fa2"); setAttr(c1, "rx", "3"); setAttr(c1, "opacity", ".85");
+  number c2 = svgRect(svg, "80", "26", "32", "26", "#ff5fa2"); setAttr(c2, "rx", "3"); setAttr(c2, "opacity", ".5");
+  return svg;
+}
+
+number thumbEvents() {
+  number svg = thumbSvg();
+  svgBg(svg, "#12101d");
+  number halo = svgCircle(svg, "72", "30", "26", "#ffb454"); setAttr(halo, "opacity", ".18");
+  number core = svgCircle(svg, "72", "30", "12", "#ffb454"); setAttr(core, "opacity", ".35");
+  svgPath(svg, "M60 24 L60 46 L66 40 L70 48 L74 46 L70 38 L78 38 Z", "#ece8f8", "", "0");
+  return svg;
+}
+
+number thumbStyled() {
+  number svg = thumbSvg();
+  number defs = create("defs"); append(svg, defs);
+  number grad = create("linearGradient");
+  setAttr(grad, "id", "sg"); setAttr(grad, "x1", "0"); setAttr(grad, "y1", "0"); setAttr(grad, "x2", "1"); setAttr(grad, "y2", "1");
+  append(defs, grad);
+  number s1 = create("stop"); setAttr(s1, "offset", "0"); setAttr(s1, "stop-color", "#ff6bcb"); append(grad, s1);
+  number s2 = create("stop"); setAttr(s2, "offset", "1"); setAttr(s2, "stop-color", "#6d5dfc"); append(grad, s2);
+  svgBg(svg, "#171426");
+  number panel = svgRect(svg, "18", "12", "84", "36", "url(#sg)"); setAttr(panel, "rx", "8");
+  number c1 = svgCircle(svg, "34", "30", "7", "#fff"); setAttr(c1, "opacity", ".9");
+  svgText(svg, "34", "34", "−", "10", "#6d5dfc");
+  number c2 = svgCircle(svg, "86", "30", "7", "#fff"); setAttr(c2, "opacity", ".9");
+  svgText(svg, "86", "34", "+", "10", "#6d5dfc");
+  number qty = svgRect(svg, "52", "25", "16", "10", "#fff"); setAttr(qty, "rx", "2"); setAttr(qty, "opacity", ".95");
+  return svg;
+}
+
+number thumbSwitch() {
+  number svg = thumbSvg();
+  svgBg(svg, "#171426");
+  number t1 = svgRect(svg, "14", "10", "30", "10", "#6fd9e7"); setAttr(t1, "rx", "5");
+  number t2 = svgRect(svg, "48", "10", "30", "10", "#3b3358"); setAttr(t2, "rx", "5");
+  number t3 = svgRect(svg, "82", "10", "24", "10", "#3b3358"); setAttr(t3, "rx", "5");
+  number panel = svgRect(svg, "14", "28", "92", "24", "#26213c"); setAttr(panel, "rx", "6"); setAttr(panel, "stroke", "#6fd9e7");
+  number l1 = svgRect(svg, "22", "36", "40", "6", "#ffb454"); setAttr(l1, "rx", "3");
+  number l2 = svgRect(svg, "22", "45", "60", "4", "#a89fc8"); setAttr(l2, "rx", "2"); setAttr(l2, "opacity", ".6");
+  return svg;
+}
+
+number thumbSensing() {
+  number svg = thumbSvg();
+  svgBg(svg, "#eef2ff");
+  number g1 = svgRect(svg, "10", "10", "20", "16", "#3a55d8"); setAttr(g1, "rx", "3");
+  number g2 = svgRect(svg, "34", "10", "20", "16", "#3a55d8"); setAttr(g2, "rx", "3");
+  number g3 = svgRect(svg, "58", "10", "20", "16", "#3a55d8"); setAttr(g3, "rx", "3");
+  number g4 = svgRect(svg, "82", "10", "20", "16", "#6fd9e7"); setAttr(g4, "rx", "3");
+  number w1 = svgRect(svg, "10", "34", "43", "16", "#c9d4ff"); setAttr(w1, "rx", "3");
+  number w2 = svgRect(svg, "57", "34", "45", "16", "#c9d4ff"); setAttr(w2, "rx", "3");
+  svgPath(svg, "M104 44 h8 m0 0 l-3 -3 m3 3 l-3 3", "none", "#3a55d8", "1.5");
+  return svg;
+}
+
+// neon.when 缩略图是新画的(原来那张是活 iframe,没有静态图):两段弧线抽象出「conic 渐变
+// 光环被 mask 裁成一圈边框」的意象,青/粉两色对照原版 NeonCard 的 cyan/magenta。
+number thumbNeon() {
+  number svg = thumbSvg();
+  svgBg(svg, "#111111");
+  number a1 = svgPath(svg, "M60 10 A20 20 0 0 1 80 30", "none", "#6fd9e7", "4"); setAttr(a1, "stroke-linecap", "round");
+  number a2 = svgPath(svg, "M80 30 A20 20 0 0 1 60 50", "none", "#ff5fa2", "4"); setAttr(a2, "stroke-linecap", "round");
+  number a3 = svgPath(svg, "M60 50 A20 20 0 0 1 40 30", "none", "#6fd9e7", "4"); setAttr(a3, "stroke-linecap", "round");
+  number a4 = svgPath(svg, "M40 30 A20 20 0 0 1 60 10", "none", "#ff5fa2", "4"); setAttr(a4, "stroke-linecap", "round");
+  svgText(svg, "60", "34", "W", "16", "#ffffff");
+  return svg;
+}
+
+// 头牌横幅(blog.when)专属缩略图,230x150 视窗,坐标照抄 examples.html 的 .lead-thumb。
+number leadThumb() {
+  number svg = create("svg");
+  setAttr(svg, "width", "230"); setAttr(svg, "height", "150"); setAttr(svg, "viewBox", "0 0 230 150"); setAttr(svg, "fill", "none");
+  number frame = svgRect(svg, "1", "1", "228", "148", "#171426"); setAttr(frame, "rx", "12"); setAttr(frame, "stroke", "#3b3358");
+  number halo = svgCircle(svg, "42", "42", "22", "none"); setAttr(halo, "stroke", "#ffb454"); setAttr(halo, "stroke-width", "2"); setAttr(halo, "opacity", ".9");
+  number ring = svgCircle(svg, "42", "42", "15", "#26213c"); setAttr(ring, "stroke", "#6fd9e7"); setAttr(ring, "stroke-width", "1.5");
+  svgCircle(svg, "42", "42", "6", "#ffb454");
+  number t1 = svgRect(svg, "76", "30", "120", "9", "#ece8f8"); setAttr(t1, "rx", "4.5"); setAttr(t1, "opacity", ".85");
+  number t2 = svgRect(svg, "76", "46", "80", "7", "#a89fc8"); setAttr(t2, "rx", "3.5"); setAttr(t2, "opacity", ".6");
+  number prog = svgCircle(svg, "196", "42", "14", "none"); setAttr(prog, "stroke", "#3b3358"); setAttr(prog, "stroke-width", "3");
+  number arc = svgPath(svg, "M196 28 a14 14 0 0 1 12 21", "none", "#6fd9e7", "3"); setAttr(arc, "stroke-linecap", "round");
+  number card1 = svgRect(svg, "18", "78", "94", "40", "#26213c"); setAttr(card1, "rx", "7"); setAttr(card1, "stroke", "#3b3358");
+  number card2 = svgRect(svg, "118", "78", "94", "40", "#26213c"); setAttr(card2, "rx", "7"); setAttr(card2, "stroke", "#3b3358");
+  number l1 = svgRect(svg, "28", "88", "60", "6", "#ffb454"); setAttr(l1, "rx", "3"); setAttr(l1, "opacity", ".8");
+  number l2 = svgRect(svg, "28", "100", "72", "5", "#a89fc8"); setAttr(l2, "rx", "2.5"); setAttr(l2, "opacity", ".5");
+  number l3 = svgRect(svg, "128", "88", "54", "6", "#ff5fa2"); setAttr(l3, "rx", "3"); setAttr(l3, "opacity", ".8");
+  number l4 = svgRect(svg, "128", "100", "70", "5", "#a89fc8"); setAttr(l4, "rx", "2.5"); setAttr(l4, "opacity", ".5");
+  number wave = svgPath(svg, "M14 134 H36 V128 H58 V134 H80 V128 H102 V134 H124 V128 H146 V134 H168 V128 H190 V134 H214", "none", "#ffb454", "1.5");
+  setAttr(wave, "opacity", ".7");
+  return svg;
+}
+
+// ── 展示卡片:整卡是一个真 <a>,内部手拼缩略图/文件徽章/标题/说明/跳转提示 —— 对照 examples.html
+// 的 .show-card(九张原有卡片 + 降级后的 neon.when,一共十张,结构完全一样)。
+number showCard(string file, string title, string desc, string href, number thumb) {
+  number a = create("a");
+  setAttr(a, "href", href);
+  setStyle(a, "display", "flex"); setStyle(a, "flex-direction", "column"); setStyle(a, "gap", "8px");
+  setStyle(a, "background", cPanel); setStyle(a, "border", "1px solid " + cLine); setStyle(a, "border-radius", "12px");
+  setStyle(a, "padding", "22px"); setStyle(a, "color", cText); setStyle(a, "text-decoration", "none");
+
+  number thumbBox = create("div");
+  setStyle(thumbBox, "display", "block"); setStyle(thumbBox, "width", "100%"); setStyle(thumbBox, "height", "88px");
+  setStyle(thumbBox, "border-radius", "9px"); setStyle(thumbBox, "margin-bottom", "4px");
+  setStyle(thumbBox, "border", "1px solid " + cLine); setStyle(thumbBox, "overflow", "hidden"); setStyle(thumbBox, "background", cBgDeep);
+  append(thumbBox, thumb);
+  append(a, thumbBox);
+
+  number badge = create("span");
+  setText(badge, file);
+  setStyle(badge, "font-family", fMono); setStyle(badge, "font-size", "11px"); setStyle(badge, "letter-spacing", "0.1em");
+  setStyle(badge, "color", cSignal); setStyle(badge, "border", "1px solid " + cLine); setStyle(badge, "border-radius", "999px");
+  setStyle(badge, "padding", "5px 10px"); setStyle(badge, "background", cBgDeep); setStyle(badge, "align-self", "flex-start");
+  append(a, badge);
+
+  number h = create("h3");
+  setText(h, title);
+  setStyle(h, "margin", "6px 0 0"); setStyle(h, "font-size", "18px"); setStyle(h, "color", cText);
+  append(a, h);
+
+  number p = create("p");
+  setText(p, desc);
+  setStyle(p, "margin", "0"); setStyle(p, "font-size", "13.5px"); setStyle(p, "color", cDim); setStyle(p, "flex", "1 1 auto"); setStyle(p, "line-height", "1.6");
+  append(a, p);
+
+  number go = create("span");
+  setText(go, "在 Playground 打开 →");
+  setStyle(go, "font-size", "13px"); setStyle(go, "font-weight", "600"); setStyle(go, "color", cTrace);
+  append(a, go);
+
+  return a;
+}
+
+// 头牌横幅(blog.when):整卡是 <a>,左文右图两栏 —— 对照 examples.html 的 .show-lead。
+number leadCard() {
+  number a = create("a");
+  setAttr(a, "href", "./playground.html?example=blog.when");
+  setStyle(a, "display", "flex"); setStyle(a, "gap", "26px"); setStyle(a, "align-items", "center"); setStyle(a, "flex-wrap", "wrap");
+  setStyle(a, "background", "linear-gradient(150deg, " + cPanel + ", " + cBgDeep + ")");
+  setStyle(a, "border", "1px solid " + cLine); setStyle(a, "border-radius", "14px");
+  setStyle(a, "padding", "30px"); setStyle(a, "color", cText); setStyle(a, "margin-bottom", "24px");
+  setStyle(a, "text-decoration", "none");
+
+  number body = create("div");
+  setStyle(body, "flex", "1 1 320px"); setStyle(body, "min-width", "0");
+
+  number badge = create("span");
+  setText(badge, "blog.when · 头牌");
+  setStyle(badge, "font-family", fMono); setStyle(badge, "font-size", "11px"); setStyle(badge, "letter-spacing", "0.1em");
+  setStyle(badge, "color", cSignal); setStyle(badge, "border", "1px solid " + cLine); setStyle(badge, "border-radius", "999px");
+  setStyle(badge, "padding", "5px 10px"); setStyle(badge, "background", cBgDeep); setStyle(badge, "display", "inline-block");
+  append(body, badge);
+
+  number h = create("h3");
+  setText(h, "个人博客 · 前端语法综合演示");
+  setStyle(h, "margin", "8px 0 6px"); setStyle(h, "font-size", "25px"); setStyle(h, "color", cText);
+  append(body, h);
+
+  number p = create("p");
+  setText(p, "一份 .when 长成一整套博客门面:头像光晕、技能环形进度条、页脚波浪分割线——全是真 svg/circle/path,由 create/setAttr/append 手拼,零新语法。在线照片走 Image(url) 真实加载,不是本地占位图。这是「前端也只是插件」最完整的证明。");
+  setStyle(p, "margin", "0"); setStyle(p, "color", cDim); setStyle(p, "font-size", "14.5px"); setStyle(p, "max-width", "42em"); setStyle(p, "line-height", "1.7");
+  append(body, p);
+
+  number go = create("span");
+  setText(go, "在 Playground 打开 →");
+  setStyle(go, "display", "block"); setStyle(go, "margin-top", "12px"); setStyle(go, "font-size", "13px"); setStyle(go, "font-weight", "600"); setStyle(go, "color", cTrace);
+  append(body, go);
+
+  append(a, body);
+
+  number thumbWrap = create("div");
+  setStyle(thumbWrap, "flex", "0 0 auto");
+  append(thumbWrap, leadThumb());
+  append(a, thumbWrap);
+
+  return a;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  十个语言核心特性片段:代码/输出都是从 examples.html 原样誊抄(那边的输出是引擎真实跑出来
+//  的结果)。lines/colors 两个平行 group 靠 each(...) with(idx, line) 的索引对齐取色——
+//  默认 cText,注释行 cDim,含 := 的派生行 cTrace,和 landing.when LiveCard 的取色规则一致。
+//
+//  ★ 07-interp 这组的代码文本里,${name}/${a}/${b}/${a * b} 是要"原样显示"的字面文本,不是
+//  真的要在本页插值——所以全部写成 \${...} 转义,否则会被 WhenScript 的字符串插值当场求值,
+//  在页面上显示出这个作用域里根本不存在的变量值(踩过的坑,见 landing.when 同款注释)。
+// ══════════════════════════════════════════════════════════════════════════════
+
+group lines01 = [
+  "import { print } from \"console\";",
+  "number a = 10;",
+  "number b = 3;",
+  "string lang = \"WhenScript\";",
+  "bool strict = true;",
+  "",
+  "print(lang, \" 是强类型的: \", strict);",
+  "print(\"a + b = \", a + b);",
+  "print(\"a / b = \", a / b);",
+  "print(\"a > b: \", a > b);"
+];
+group colors01 = [cText, cText, cText, cText, cText, cDim, cText, cText, cText, cText];
+group out01 = [
+  "WhenScript 是强类型的: true",
+  "a + b = 13",
+  "a / b = 3.3333333333333335",
+  "a > b: true"
+];
+string src01 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKbnVtYmVyIGEgPSAxMDsKbnVtYmVyIGIgPSAzOwpzdHJpbmcgbGFuZyA9ICJXaGVuU2NyaXB0IjsKYm9vbCBzdHJpY3QgPSB0cnVlOwoKcHJpbnQobGFuZywgIiDmmK_lvLrnsbvlnovnmoQ6ICIsIHN0cmljdCk7CnByaW50KCJhICsgYiA9ICIsIGEgKyBiKTsKcHJpbnQoImEgLyBiID0gIiwgYSAvIGIpOwpwcmludCgiYSA-IGI6ICIsIGEgPiBiKTs%3D";
+
+group lines02 = [
+  "import { print } from \"console\";",
+  "number price = 100;",
+  "number shipping = 8;",
+  "number total := price + shipping;  // total 持续等于右边",
+  "",
+  "print(\"total = \", total);",
+  "price = 200;                       // 只写 price,total 自己变",
+  "print(\"total = \", total);",
+  "shipping = 20;",
+  "print(\"total = \", total);"
+];
+group colors02 = [cText, cText, cText, cTrace, cDim, cText, cText, cText, cText, cText];
+group out02 = ["total = 108", "total = 208", "total = 220"];
+string src02 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKbnVtYmVyIHByaWNlID0gMTAwOwpudW1iZXIgc2hpcHBpbmcgPSA4OwpudW1iZXIgdG90YWwgOj0gcHJpY2UgKyBzaGlwcGluZzsgIC8vIHRvdGFsIOaMgee7reetieS6juWPs-i-uQoKcHJpbnQoInRvdGFsID0gIiwgdG90YWwpOwpwcmljZSA9IDIwMDsgICAgICAgICAgICAgICAgICAgICAgIC8vIOWPquWGmSBwcmljZSx0b3RhbCDoh6rlt7Hlj5gKcHJpbnQoInRvdGFsID0gIiwgdG90YWwpOwpzaGlwcGluZyA9IDIwOwpwcmludCgidG90YWwgPSAiLCB0b3RhbCk7";
+
+group lines03 = [
+  "import { print } from \"console\";",
+  "number count = 0;",
+  "",
+  "when(count == 3) { print(\"count 到 3 了!\"); }",
+  "when(count > 4)  { print(\"超过 4: \", count); }",
+  "",
+  "count = 1;",
+  "count = 3;   // 触发第一条",
+  "count = 5;   // 触发第二条",
+  "count = 6;   // 持续为真,不重复触发(边沿语义)"
+];
+group colors03 = [cText, cText, cDim, cText, cText, cDim, cText, cText, cText, cText];
+group out03 = ["count 到 3 了!", "超过 4: 5"];
+string src03 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKbnVtYmVyIGNvdW50ID0gMDsKCndoZW4oY291bnQgPT0gMykgeyBwcmludCgiY291bnQg5YiwIDMg5LqGISIpOyB9CndoZW4oY291bnQgPiA0KSAgeyBwcmludCgi6LaF6L-HIDQ6ICIsIGNvdW50KTsgfQoKY291bnQgPSAxOwpjb3VudCA9IDM7ICAgLy8g6Kem5Y-R56ys5LiA5p2hCmNvdW50ID0gNTsgICAvLyDop6blj5HnrKzkuozmnaEKY291bnQgPSA2OyAgIC8vIOaMgee7reS4uuecnyzkuI3ph43lpI3op6blj5Eo6L655rK_6K-t5LmJKQ%3D%3D";
+
+group lines04 = [
+  "import { print } from \"console\";",
+  "number temp = 20;",
+  "",
+  "changed(temp) with (old, new) {",
+  "  print(\"温度 \", old, \" -> \", new);",
+  "}",
+  "when(temp >= 26) {",
+  "  print(\">> 达到 26 度,告警一次\");",
+  "}",
+  "",
+  "temp = 23;",
+  "temp = 26;",
+  "temp = 28;   // changed 照报,when 不再响"
+];
+group colors04 = [cText, cText, cDim, cText, cText, cText, cText, cText, cText, cDim, cText, cText, cText];
+group out04 = ["温度 20 -> 23", "温度 23 -> 26", ">> 达到 26 度,告警一次", "温度 26 -> 28"];
+string src04 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKbnVtYmVyIHRlbXAgPSAyMDsKCmNoYW5nZWQodGVtcCkgd2l0aCAob2xkLCBuZXcpIHsKICBwcmludCgi5rip5bqmICIsIG9sZCwgIiAtPiAiLCBuZXcpOwp9CndoZW4odGVtcCA-PSAyNikgewogIHByaW50KCI-PiDovr7liLAgMjYg5bqmLOWRiuitpuS4gOasoSIpOwp9Cgp0ZW1wID0gMjM7CnRlbXAgPSAyNjsKdGVtcCA9IDI4OyAgIC8vIGNoYW5nZWQg54Wn5oqlLHdoZW4g5LiN5YaN5ZON";
+
+group lines05 = [
+  "import { print } from \"console\";",
+  "event<number, string> onLog;",
+  "",
+  "when(onLog) with(number code, string msg) {",
+  "  print(\"[\", code, \"] \", msg);",
+  "}",
+  "",
+  "emit onLog(200, \"OK\");",
+  "emit onLog(404, \"Not Found\");",
+  "",
+  "// 委托可传递: 把信号线交给函数, 让它来发射",
+  "void worker(event<number, string> report) {",
+  "  emit report(500, \"worker 内部出错\");",
+  "}",
+  "worker(onLog);"
+];
+group colors05 = [cText, cText, cDim, cText, cText, cText, cDim, cText, cText, cDim, cDim, cText, cText, cText, cText];
+group out05 = ["[200] OK", "[404] Not Found", "[500] worker 内部出错"];
+string src05 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKZXZlbnQ8bnVtYmVyLCBzdHJpbmc-IG9uTG9nOwoKd2hlbihvbkxvZykgd2l0aChudW1iZXIgY29kZSwgc3RyaW5nIG1zZykgewogIHByaW50KCJbIiwgY29kZSwgIl0gIiwgbXNnKTsKfQoKZW1pdCBvbkxvZygyMDAsICJPSyIpOwplbWl0IG9uTG9nKDQwNCwgIk5vdCBGb3VuZCIpOwoKLy8g5aeU5omY5Y-v5Lyg6YCSOiDmiorkv6Hlj7fnur_kuqTnu5nlh73mlbAsIOiuqeWug-adpeWPkeWwhAp2b2lkIHdvcmtlcihldmVudDxudW1iZXIsIHN0cmluZz4gcmVwb3J0KSB7CiAgZW1pdCByZXBvcnQoNTAwLCAid29ya2VyIOWGhemDqOWHuumUmSIpOwp9CndvcmtlcihvbkxvZyk7";
+
+group lines06 = [
+  "import { print } from \"console\";",
+  "group arr = [1, 2, 3];",
+  "print(\"arr[0] = \", arr[0]);",
+  "arr[0] = 100;",
+  "print(\"改后 arr[0] = \", arr[0]);",
+  "",
+  "// 字符串键自动走哈希表, 数字键走数组",
+  "group user = [\"name\": \"when\", \"age\": 3];",
+  "print(\"user 的 name = \", user[\"name\"]);",
+  "print(\"user 的 age  = \", user[\"age\"]);"
+];
+group colors06 = [cText, cText, cText, cText, cText, cDim, cDim, cText, cText, cText];
+group out06 = ["arr[0] = 1", "改后 arr[0] = 100", "user 的 name = when", "user 的 age  = 3"];
+string src06 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKZ3JvdXAgYXJyID0gWzEsIDIsIDNdOwpwcmludCgiYXJyWzBdID0gIiwgYXJyWzBdKTsKYXJyWzBdID0gMTAwOwpwcmludCgi5pS55ZCOIGFyclswXSA9ICIsIGFyclswXSk7CgovLyDlrZfnrKbkuLLplK7oh6rliqjotbDlk4jluIzooagsIOaVsOWtl-mUrui1sOaVsOe7hApncm91cCB1c2VyID0gWyJuYW1lIjogIndoZW4iLCAiYWdlIjogM107CnByaW50KCJ1c2VyIOeahCBuYW1lID0gIiwgdXNlclsibmFtZSJdKTsKcHJpbnQoInVzZXIg55qEIGFnZSAgPSAiLCB1c2VyWyJhZ2UiXSk7";
+
+group lines07 = [
+  "import { print } from \"console\";",
+  "string name = \"WhenScript\";",
+  "number a = 6;",
+  "number b = 7;",
+  "print(\"你好,\${name}!\");",
+  "print(\"\${a} * \${b} = \${a * b}\");"
+];
+group colors07 = [cText, cText, cText, cText, cText, cText];
+group out07 = ["你好,WhenScript!", "6 * 7 = 42"];
+string src07 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKc3RyaW5nIG5hbWUgPSAiV2hlblNjcmlwdCI7Cm51bWJlciBhID0gNjsKbnVtYmVyIGIgPSA3OwpwcmludCgi5L2g5aW9LCR7bmFtZX0hIik7CnByaW50KCIke2F9ICogJHtifSA9ICR7YSAqIGJ9Iik7";
+
+group lines08 = [
+  "import { print } from \"console\";",
+  "// 浮点的 0.1 + 0.2 有名地不等于 0.3",
+  "// number<string> 是精确定点; :2 = 结果保留两位小数",
+  "number<string> a = \"0.10\";",
+  "number<string> b = \"0.20\";",
+  "number<string>:2 sum := a + b;   // 派生和, 两位小数",
+  "",
+  "print(\"浮点: 0.1 + 0.2 = \", 0.1 + 0.2);",
+  "print(\"定点: a + b     = \", sum);",
+  "a = \"99.90\";",
+  "print(\"a 一变, sum 跟着变: \", sum);"
+];
+group colors08 = [cText, cDim, cDim, cText, cText, cTrace, cDim, cText, cText, cText, cText];
+group out08 = ["浮点: 0.1 + 0.2 = 0.30000000000000004", "定点: a + b     = 0.30", "a 一变, sum 跟着变: 100.10"];
+string src08 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKLy8g5rWu54K555qEIDAuMSArIDAuMiDmnInlkI3lnLDkuI3nrYnkuo4gMC4zCi8vIG51bWJlcjxzdHJpbmc-IOaYr-eyvuehruWumueCuTsgOjIgPSDnu5Pmnpzkv53nlZnkuKTkvY3lsI_mlbAKbnVtYmVyPHN0cmluZz4gYSA9ICIwLjEwIjsKbnVtYmVyPHN0cmluZz4gYiA9ICIwLjIwIjsKbnVtYmVyPHN0cmluZz46MiBzdW0gOj0gYSArIGI7ICAgLy8g5rS-55Sf5ZKMLCDkuKTkvY3lsI_mlbAKCnByaW50KCLmta7ngrk6IDAuMSArIDAuMiA9ICIsIDAuMSArIDAuMik7CnByaW50KCLlrprngrk6IGEgKyBiICAgICA9ICIsIHN1bSk7CmEgPSAiOTkuOTAiOwpwcmludCgiYSDkuIDlj5gsIHN1bSDot5_nnYDlj5g6ICIsIHN1bSk7";
+
+group lines09 = [
+  "import { print } from \"console\";",
+  "group nums = [3, 1, 4, 1, 5, 9, 2, 6];",
+  "number sum = 0;",
+  "",
+  "each(nums) with(n) {",
+  "  if (n == 9) { break; }   // 撞到 9,全量跳出循环",
+  "  sum = sum + n;",
+  "}",
+  "print(\"累加到 9 之前: sum = \", sum);"
+];
+group colors09 = [cText, cText, cText, cDim, cText, cText, cText, cText, cText];
+group out09 = ["累加到 9 之前: sum = 14"];
+string src09 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKZ3JvdXAgbnVtcyA9IFszLCAxLCA0LCAxLCA1LCA5LCAyLCA2XTsKbnVtYmVyIHN1bSA9IDA7CgplYWNoKG51bXMpIHdpdGgobikgewogIGlmIChuID09IDkpIHsgYnJlYWs7IH0gICAvLyDmkp7liLAgOSzlhajph4_ot7Plh7rlvqrnjq8KICBzdW0gPSBzdW0gKyBuOwp9CnByaW50KCLntK_liqDliLAgOSDkuYvliY06IHN1bSA9ICIsIHN1bSk7";
+
+group lines10 = [
+  "import { print } from \"console\";",
+  "",
+  "number add(number a, number b) { return a + b; }",
+  "number square(number n) { return n * n; }",
+  "",
+  "print(\"add(3, 4)  = \", add(3, 4));",
+  "print(\"square(5)  = \", square(5));",
+  "",
+  "// function 是一等类型: 装进变量再调用",
+  "function op = add;",
+  "print(\"op(10, 20) = \", op(10, 20));"
+];
+group colors10 = [cText, cDim, cText, cText, cDim, cText, cText, cDim, cDim, cText, cText];
+group out10 = ["add(3, 4)  = 7", "square(5)  = 25", "op(10, 20) = 30"];
+string src10 = "./playground.html?src=aW1wb3J0IHsgcHJpbnQgfSBmcm9tICJjb25zb2xlIjsKCm51bWJlciBhZGQobnVtYmVyIGEsIG51bWJlciBiKSB7IHJldHVybiBhICsgYjsgfQpudW1iZXIgc3F1YXJlKG51bWJlciBuKSB7IHJldHVybiBuICogbjsgfQoKcHJpbnQoImFkZCgzLCA0KSAgPSAiLCBhZGQoMywgNCkpOwpwcmludCgic3F1YXJlKDUpICA9ICIsIHNxdWFyZSg1KSk7CgovLyBmdW5jdGlvbiDmmK_kuIDnrYnnsbvlnos6IOijhei_m-WPmOmHj-WGjeiwg-eUqApmdW5jdGlvbiBvcCA9IGFkZDsKcHJpbnQoIm9wKDEwLCAyMCkgPSAiLCBvcCgxMCwgMjApKTs%3D";
+
+// 模拟控制台卡片(container):标题 + 说明 + 终端外壳(三色圆点 + 文件名 + Playground 链接 +
+// 代码 + 输出)。lines/colors/outs 三个 group 靠 each() 的索引对齐渲染,一张卡一份数据。
+container FeatureCard(string title, string blurb, string filename, string srcHref, group lines, group colors, group outs) extends Column {
+  gap: 4;
+  Text(title) { size: 17; weight: bold; color: cText; }
+  Text(blurb) { size: 13.5; color: cDim; marginTop: 4; marginBottom: 12; lineHeight: "1.6"; }
+  Column {
+    bg: cTerm; border: "1px solid " + cLine; radius: 12; overflow: "hidden"; shadow: "0 14px 36px rgba(0,0,0,.28)";
+    Row {
+      alignItems: "center"; gap: 7; pad: (9, 14); borderBottom: "1px solid " + cLine; bg: cBgDeep;
+      Box { width: 10; height: 10; radius: 999; bg: "#ff5f57"; }
+      Box { width: 10; height: 10; radius: 999; bg: "#febc2e"; }
+      Box { width: 10; height: 10; radius: 999; bg: "#28c840"; }
+      Text(filename) { font: fMono; size: 11; color: cDim; letterSpacing: "0.08em"; marginLeft: 6; }
+      append(self, playRunLink(srcHref));
+    }
+    Column {
+      pad: (14, 16); gap: 1;
+      appendCodeLines(self, lines, colors);
+    }
+    Column {
+      pad: (8, 16, 12, 16); borderTop: "1px solid " + cLine; bg: "#0f0d1a";
+      Text("output · 真实运行结果") { font: fMono; size: 10; color: "#5c5480"; letterSpacing: "0.14em"; textTransform: "uppercase"; marginTop: 4; marginBottom: 8; }
+      appendOutLines(self, outs);
+    }
+  }
+}
+
+// ── 页头 ─────────────────────────────────────────────────────────────────────
+container PageHead() {
+  bg: cBg; pad: (56, 0, 8, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("examples · 眼见为实") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 16; }
+    Text("示例画廊") { size: 44; weight: 900; color: cText; lineHeight: "1.2"; marginBottom: 12; }
+    Text("这一页分两块。上半是特性测试样例——语言核心一屏一个概念,模拟控制台里每行输出都是引擎真实跑出来的。下半是展示样例——前端容器语法做出的酷炫页面,点开就在 Playground 里跑,代码就在左边,随便改。") {
+      size: 16; color: cDim; maxWidth: "48em"; marginBottom: 8; lineHeight: "1.7";
+    }
+    Row {
+      gap: 12; flexWrap: "wrap"; marginTop: 20;
+      append(self, jumpLink("▸ 特性测试样例 · 语言核心", "#features"));
+      append(self, jumpLink("▸ 展示样例 · 前端酷炫", "#showcase"));
+    }
+  }
+}
+
+// ── #features:语言核心,一屏一个概念 ───────────────────────────────────────────
+container FeatureTests() {
+  id: "features"; bg: cBg; pad: (48, 0, 56, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("console · 引擎真跑") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 10; }
+    Text("特性测试样例:一屏一个概念") { size: 30; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("语言核心不需要浏览器——下面十个最小可跑片段,覆盖类型、派生 :=、反应式家族(when/changed)、event 委托、group、字符串插值、定点小数、each/break,以及 function 一等类型。点「在 Playground 跑」当场复现。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 32; lineHeight: "1.7";
+    }
+    Box {
+      display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))"; gap: 26;
+      FeatureCard("变量与类型", "强类型直给:number / string / bool,运算即所见。", "01-types.when", src01, lines01, colors01, out01)
+      FeatureCard("派生绑定 :=", "total 持续等于 price + shipping:只改输入,派生值自己变。", "02-derive.when", src02, lines02, colors02, out02)
+      FeatureCard("when · 边沿触发", "条件从假变真的那一刻触发一次;持续为真不重复刷屏。", "03-when-edge.when", src03, lines03, colors03, out03)
+      FeatureCard("changed · 每变必报", "changed 记流水账,when 只在越线那一下告警——各司其职。", "04-changed.when", src04, lines04, colors04, out04)
+      FeatureCard("event 委托", "event<T> 是一等值:emit 触发、with 收参,信号线还能交给函数。", "05-event.when", src05, lines05, colors05, out05)
+      FeatureCard("group 数据结构", "数组和哈希表的统一体:数字键走数组,字符串键走哈希。", "06-group.when", src06, lines06, colors06, out06)
+      FeatureCard("字符串插值", "\"\${a} * \${b} = \${a * b}\"——表达式直接进字符串。", "07-interp.when", src07, lines07, colors07, out07)
+      FeatureCard("定点小数 number<string>", "浮点的 0.1 + 0.2 会漂移;number<string> 精确定点,:2 定标两位小数。", "08-money.when", src08, lines08, colors08, out08)
+      FeatureCard("each · break 全量跳出", "each(group) 遍历,break 撞到即刻整体跳出循环。", "09-each.when", src09, lines09, colors09, out09)
+      FeatureCard("function 是一等类型", "函数能装进变量再调用——function 是变量类型,不是保留字。", "10-function.when", src10, lines10, colors10, out10)
+    }
+  }
+}
+
+// ── #showcase:前端能做到哪一步 ─────────────────────────────────────────────────
+container Showcase() {
+  id: "showcase"; bg: cBgDeep; pad: (48, 0, 56, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("playground · 眼见为实") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 10; }
+    Text("展示样例:前端能做到哪一步") { size: 30; weight: 800; color: cText; marginBottom: 12; lineHeight: "1.3"; }
+    Text("同一门语言,同一套 container 容器语法——没有虚拟 DOM,布局就是 := 电路。每张卡都在 Playground 里当场跑,wasm 引擎、真实 DOM,代码就在左边随便改。") {
+      size: 15; color: cDim; maxWidth: "48em"; marginBottom: 32; lineHeight: "1.7";
+    }
+    append(self, leadCard());
+    Box {
+      display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))"; gap: 18;
+      append(self, showCard("game.when", "Flappy 金苹果",
+        "一个完整的游戏:没有游戏引擎、没有主循环对象、没有一个监听器的注册/解绑。碰撞检测、计分、柱子回收全是扁平的 when 条件;跳跃与物理冻结是代数,不是分支。点击画面拍打苹果。",
+        "./playground.html?example=game.when", thumbGame()));
+      append(self, showCard("mask.when", "容器蒙版合成",
+        "PS 的杀手锏做成一等写法:拿一个容器的形状/明度当另一个容器的蒙版,mask: 某容器。运行时把蒙版容器搬进共享 <mask>,内核零改;文字挖空、圆形开窗都是同一招。",
+        "./playground.html?example=mask.when", thumbMask()));
+      append(self, showCard("motion.when", "动画编排 · WAAPI",
+        "Web Animations API 原语 animate:关键帧和时序都是普通 group,序列化后交给浏览器原生动画引擎——delay 错峰入场,弹簧式缓动回弹。",
+        "./playground.html?example=motion.when", thumbMotion()));
+      append(self, showCard("clip.when", "剪贴蒙版",
+        "P5 剪贴蒙版:底层可见,把上面的层裁到它的形状——写法 clipTo: base,base 用 <use> 活引用留在原地。是真 PS 剪贴组,不是吃掉源的 mask:。",
+        "./playground.html?example=clip.when", thumbClip()));
+      append(self, showCard("masonry.when", "瀑布流排版",
+        "flex/grid 都做不好的事:按每张卡片的实测高度,塞进当前最短的列。measure(card) 拿反应式真实尺寸,父容器与子卡片协商定位——骨灰级自定义排版。",
+        "./playground.html?example=masonry.when", thumbMasonry()));
+      append(self, showCard("events.when", "富事件跟随",
+        "类型即契约:声明 event<group>,DOM 事件的坐标/键码/修饰键就装成 group 喂进来。聚光灯跟鼠标、hover 是反应式状态、键盘面板实时显示按键。",
+        "./playground.html?example=events.when", thumbEvents()));
+      append(self, showCard("styled.when", "反应式购物车",
+        "渐变卡片里点 +/−:命令式只写 qty ± 1 这一件事,总价、颜色、满减徽章全是 := 派生加 changed 反应,自己跟着变。",
+        "./playground.html?example=styled.when", thumbStyled()));
+      append(self, showCard("switch.when", "路由切换",
+        "容器体 switch = 反应式选择器:url 一变,视图自动切到匹配的 case——没有路由库,也不需要。",
+        "./playground.html?example=switch.when", thumbSwitch()));
+      append(self, showCard("sensing.when", "感知信号 · 自适应网格",
+        "自适应布局,不写一句媒体查询:cols 随容器宽度反应式变(>500→4 列,>300→3 列)。ResizeObserver 把宽度写进信号,:= 派生加 changed 让列数和文字全自动跟随。",
+        "./playground.html?example=sensing.when", thumbSensing()));
+      append(self, showCard("neon.when", "光扫边框 · 图层动效",
+        "conic 渐变光层被 mask: ring(2) 裁成 2px 边框环,spin 转动的是渐变角,不是整个盒子——盒子若整体旋转,遮罩会跟着转,视觉会失真。标题文字同理:线性渐变 + clipText + sweep 做出光扫过的效果。",
+        "./playground.html?example=neon.when", thumbNeon()));
+    }
+  }
+}
+
+// ── 整页(顶层容器,与 landing.when 同一结构:NavBar → 正文 → Footer)──────────────
+container App() {
+  font: fSans; bg: cBg; color: cText;
+  NavBar()
+  PageHead()
+  FeatureTests()
+  append(self, waveDivider());
+  Showcase()
+  Footer {
+    bg: cBg; borderTop: "1px solid " + cLine; pad: (32, 0, 44, 0);
+    WrapRow {
+      pad: (0, 24); gap: 20; flexWrap: "wrap"; alignItems: "center";
+      Text("© 2026 WhenScript · 写入,即触发") { color: cDim; size: 13; }
+      Box { width: fill; minWidth: "20px"; }
+      append(self, navLink("联系我们", "./contact.html", false, false));
+      append(self, navLink("VS Code Marketplace", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript", false, true));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
+    }
+  }
+}
+
+setStyle(query("body"), "margin", "0");
+setStyle(query("body"), "padding", "0");
+setStyle(query("body"), "background", cBg);
+App();

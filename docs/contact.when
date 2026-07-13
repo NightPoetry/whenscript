@@ -1,0 +1,358 @@
+// ══════════════════════════════════════════════════════════════════════════════
+//  WhenScript 官网「联系」页 —— 用 WhenScript 自己写的。
+//
+//  浏览器端 .when 之间不能互相 import,所以这份文件是自包含的:设计 token、导航栏、页脚
+//  全部照抄自 landing.when(唯一真理来源),不依赖任何外部 .when 模块。
+//
+//  这一页的核心是一个真表单:姓名/邮箱/留言三个字段 + 一个对人隐藏的蜜罐字段(机器人才会
+//  填),校验通过后用 net 库的 fetch() 把 JSON POST 给现网收信端点,按响应状态展示成功/
+//  失败提示——失败时才展示"替代联系渠道"卡片区,平时不占地方。
+// ══════════════════════════════════════════════════════════════════════════════
+import { create, setAttr, setStyle, setText, append, query, Text, Button, Input, Textarea } from "dom";
+import { fetch } from "net";
+import { stringify } from "json";
+import { contains, startsWith, endsWith, split, trim, len } from "strings";
+
+// ── 设计 token(与 landing.when / index.html 的 :root 变量逐值一致,另加 contact 页专用的 --err)──
+string cBg     = "#1e1b2e";   // --bg
+string cBgDeep = "#171426";   // --bg-deep
+string cPanel  = "#26213c";   // --panel
+string cLine   = "#3b3358";   // --line
+string cText   = "#ece8f8";   // --text
+string cDim    = "#a89fc8";   // --dim
+string cSignal = "#ffb454";   // --signal 琥珀
+string cTrace  = "#6fd9e7";   // --trace  青
+string cArrow  = "#ff5fa2";   // --arrow  粉
+string cOk     = "#89ca78";   // --ok
+string cErr    = "#ff7a90";   // --err(contact 页新增:校验/发送失败提示色)
+string fMono   = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+string fSans   = "system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+
+// 留言收件端点——真实生产地址,原样保留,不改。
+string CONTACT_ENDPOINT = "https://r5x6516792.goho.co/area/cbec665ad8c7/api/contact";
+
+// ── 表单反应式状态(module 级——三个真字段 + 一个蜜罐 + 提交/展示状态)────────────────
+string cName      = "";
+string cEmail     = "";
+string cMsg       = "";
+string cHoneypot  = "";       // 蜜罐字段:对人隐藏,机器人才会填
+bool   cSending   = false;
+string cStatusKind = "";      // "" | "ok" | "err" | "busy"
+string cStatusMsg  = "";
+bool   cShowAlt    = false;   // 替代渠道卡片:默认隐藏,发送失败才展示
+
+// 派生值:trim 三个字段(对齐原 JS 的 .value.trim())。
+string tName  := trim(cName);
+string tEmail := trim(cEmail);
+string tMsg   := trim(cMsg);
+
+// 邮箱粗校验(WhenScript 没有正则):有 @、@ 不在开头/结尾、@ 之后的部分有点且点不在结尾。
+// 不追求和原正则 ^[^\s@]+@[^\s@]+\.[^\s@]+$ 完全等价,官网表单这个粒度够用。
+group  emailParts  := split(tEmail, "@");
+string emailDomain := emailParts[1];
+bool cEmailShapeOk := contains(tEmail, "@") && !startsWith(tEmail, "@") && !endsWith(tEmail, "@")
+                    && contains(emailDomain, ".") && !endsWith(emailDomain, ".");
+bool cFormValid := len(tName) > 0 && len(tMsg) > 0 && cEmailShapeOk;
+
+// 状态提示文字颜色:busy 用 dim,ok 用 ok 绿,err 用 err 红。
+string statusColor := if (cStatusKind == "ok") { cOk } else if (cStatusKind == "err") { cErr } else { cDim };
+
+// ── 手拼 DOM 原语(与 landing.when 逐字一致)──────────────────────────────────────
+number navLink(string label, string href, bool active, bool external) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  if (external) { setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener"); }
+  setStyle(a, "font-size", "14px");
+  setStyle(a, "font-weight", "500");
+  setStyle(a, "text-decoration", "none");
+  setStyle(a, "padding", "4px 2px");
+  setStyle(a, "border-bottom", "2px solid transparent");
+  if (active) {
+    setStyle(a, "color", cText);
+    setStyle(a, "border-bottom", "2px solid " + cSignal);
+  } else {
+    setStyle(a, "color", cDim);
+  }
+  return a;
+}
+
+number navCta(string label, string href) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href); setAttr(a, "target", "_blank"); setAttr(a, "rel", "noopener");
+  setStyle(a, "color", cSignal); setStyle(a, "font-size", "14px"); setStyle(a, "font-weight", "600"); setStyle(a, "text-decoration", "none");
+  return a;
+}
+
+number ctaLink(string label, string href, bool primary) {
+  number a = create("a");
+  setText(a, label);
+  setAttr(a, "href", href);
+  setStyle(a, "display", "inline-block");
+  setStyle(a, "padding", "12px 22px");
+  setStyle(a, "border-radius", "10px");
+  setStyle(a, "font-size", "15px");
+  setStyle(a, "font-weight", "600");
+  setStyle(a, "text-decoration", "none");
+  if (primary) {
+    setStyle(a, "background", cSignal);
+    setStyle(a, "color", "#241c0a");
+    setStyle(a, "border", "1px solid " + cSignal);
+  } else {
+    setStyle(a, "background", "transparent");
+    setStyle(a, "color", cText);
+    setStyle(a, "border", "1px solid " + cLine);
+  }
+  return a;
+}
+
+number brandMark() {
+  number svg = create("svg");
+  setAttr(svg, "width", "26"); setAttr(svg, "height", "26"); setAttr(svg, "viewBox", "0 0 26 26");
+  number rect = create("rect");
+  setAttr(rect, "width", "26"); setAttr(rect, "height", "26"); setAttr(rect, "rx", "6"); setAttr(rect, "fill", cBgDeep);
+  append(svg, rect);
+  number path = create("path");
+  setAttr(path, "d", "M4 17 H8 V9 H13 V17 H18 V9 H22");
+  setAttr(path, "fill", "none"); setAttr(path, "stroke", cSignal);
+  setAttr(path, "stroke-width", "2"); setAttr(path, "stroke-linecap", "round"); setAttr(path, "stroke-linejoin", "round");
+  append(svg, path);
+  return svg;
+}
+
+number brandLink() {
+  number a = create("a");
+  setAttr(a, "href", "./index.html");
+  setStyle(a, "display", "flex"); setStyle(a, "align-items", "center"); setStyle(a, "gap", "10px"); setStyle(a, "text-decoration", "none");
+  append(a, brandMark());
+  number t = create("span");
+  setText(t, "WhenScript");
+  setStyle(t, "font-weight", "700"); setStyle(t, "font-size", "17px"); setStyle(t, "color", cText);
+  append(a, t);
+  return a;
+}
+
+// ── 居中内容列(对照 index.html 的 .wrap:max-width:1080px; margin:0 auto)────────
+container WrapRow() extends Row {
+  width: fill; maxWidth: "1080px"; margin: "0 auto"; alignItems: "center";
+}
+container WrapCol() extends Column {
+  width: fill; maxWidth: "1080px"; margin: "0 auto";
+}
+
+// ── 顶部导航(与 landing.when 逐字一致,仅"联系"一项 active=true)───────────────────
+container NavBar() {
+  bg: cBg; borderBottom: "1px solid " + cLine; position: "sticky"; top: 0; zIndex: "20"; backdropFilter: "blur(10px)";
+  WrapRow {
+    gap: 22; pad: (0, 24); height: 58; flexWrap: "wrap";
+    append(self, brandLink());
+    Row {
+      marginLeft: "auto"; gap: 18; alignItems: "center"; flexWrap: "wrap";
+      append(self, navLink("Playground", "./playground.html", false, false));
+      append(self, navLink("示例", "./examples.html", false, false));
+      append(self, navLink("文档", "./docs.html", false, false));
+      append(self, navLink("联系", "./contact.html", true, false));
+      append(self, navCta("VS Code 扩展", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript"));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
+    }
+  }
+}
+
+// ── 页头:eyebrow + 大标题 + 说明段落(段落里一段加粗,手拼 span+strong+span)─────────
+number pageSubParagraph() {
+  number p = create("p");
+  setStyle(p, "color", cDim); setStyle(p, "max-width", "40em"); setStyle(p, "margin", "0"); setStyle(p, "line-height", "1.7");
+  number s1 = create("span");
+  setText(s1, "发现 bug、语法有疑问、想聊合作——都欢迎。");
+  append(p, s1);
+  number strongEl = create("strong");
+  setText(strongEl, "报 bug 时带上能复现的 .when 片段");
+  setStyle(strongEl, "color", cText); setStyle(strongEl, "font-weight", "600");
+  append(p, strongEl);
+  number s2 = create("span");
+  setText(s2, "(Playground 链接最好),我们处理起来最快。");
+  append(p, s2);
+  return p;
+}
+
+container PageHead() {
+  bg: cBg; pad: (56, 0, 8, 0);
+  WrapCol {
+    pad: (0, 24);
+    Text("contact · 说句话") { font: fMono; size: 12; color: cSignal; letterSpacing: "0.18em"; marginBottom: 16; }
+    Text("联系我们") { size: "clamp(34px, 5vw, 52px)"; weight: 900; color: cText; lineHeight: "1.2"; marginBottom: 12; }
+    append(self, pageSubParagraph());
+  }
+}
+
+// ── 表单字段外壳:label 文字 + 18px 底部间距,输入控件由调用处的块继续往同一个 self 追加 ──
+container Field(string label) extends Column {
+  marginBottom: 18;
+  Text(label) { size: 13.5; color: cDim; marginBottom: 6; }
+}
+
+// ── 联系表单本体 ─────────────────────────────────────────────────────────────
+container ContactForm() extends Column {
+  id: "contactForm"; width: "560px"; maxWidth: "100%";
+
+  event<group> onContactResponse;
+
+  Field("姓名") {
+    nameIn = Input() {
+      id: "fName"; type: "text"; name: "name"; required: true; width: fill; pad: (11, 13); radius: 8;
+      border: "1px solid " + cLine; bg: cBgDeep; color: cText; size: 14;
+      setAttr(self, "maxlength", "80"); setAttr(self, "autocomplete", "name");
+    }
+    when(nameIn) with(string s) { cName = s; }
+  }
+
+  Field("邮箱(用于回信)") {
+    emailIn = Input() {
+      id: "fEmail"; type: "email"; name: "email"; required: true; width: fill; pad: (11, 13); radius: 8;
+      border: "1px solid " + cLine; bg: cBgDeep; color: cText; size: 14;
+      setAttr(self, "maxlength", "120"); setAttr(self, "autocomplete", "email");
+    }
+    when(emailIn) with(string s) { cEmail = s; }
+  }
+
+  Field("留言") {
+    msgIn = Textarea() {
+      id: "fMessage"; name: "message"; required: true; placeholder: "bug 复现步骤 / 问题 / 合作意向……";
+      width: fill; pad: (11, 13); radius: 8; border: "1px solid " + cLine; bg: cBgDeep; color: cText; size: 14;
+      minHeight: "140px"; resize: "vertical";
+      setAttr(self, "maxlength", "4000");
+    }
+    when(msgIn) with(string s) { cMsg = s; }
+  }
+
+  // 蜜罐字段:挪到屏幕外(而非 display:none)——DOM 结构里真实存在、可被聚焦,人眼看不到,
+  // 机器人脚本却会傻乎乎把它填上;填了就在提交时判定为垃圾留言直接吞掉。
+  Column {
+    position: "absolute"; left: "-9999px"; top: "-9999px"; width: "1px"; height: "1px"; overflow: "hidden"; opacity: 0;
+    setAttr(self, "aria-hidden", "true");
+    Text("请勿填写") { size: 13.5; color: cDim; marginBottom: 6; }
+    hpIn = Input() {
+      id: "fWebsite"; type: "text"; name: "website"; width: fill; pad: (11, 13); radius: 8;
+      border: "1px solid " + cLine; bg: cBgDeep; color: cText;
+      setAttr(self, "tabindex", "-1"); setAttr(self, "autocomplete", "off");
+    }
+    when(hpIn) with(string s) { cHoneypot = s; }
+  }
+
+  sendBtn = Button("发送留言") {
+    id: "sendBtn"; width: hug; pad: (11, 20); radius: 10; border: "1px solid " + cSignal;
+    bg: cSignal; color: "#241c0a"; weight: 600; size: 14; cursor: pointer;
+    disabled: cSending || !cFormValid;
+    opacity: if (cSending || !cFormValid) { 0.6 } else { 1 };
+  }
+  when(sendBtn) {
+    if (cHoneypot != "") {
+      // 蜜罐被填 = 机器人:装作成功,直接吞掉,不发请求。
+      cStatusKind = "ok";
+      cStatusMsg = "已发送,谢谢你的留言。";
+    } else if (tName == "" || tEmail == "" || tMsg == "") {
+      cStatusKind = "err";
+      cStatusMsg = "姓名、邮箱、留言都要填一下。";
+    } else if (!cEmailShapeOk) {
+      cStatusKind = "err";
+      cStatusMsg = "邮箱格式看起来不对,检查一下?";
+    } else {
+      cStatusKind = "busy";
+      cStatusMsg = "发送中…";
+      cSending = true;
+      group payload = {name: tName, email: tEmail, message: tMsg};
+      string payloadBody = stringify(payload);
+      fetch(CONTACT_ENDPOINT, onContactResponse, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: payloadBody
+      });
+    }
+  }
+  when(onContactResponse) with(group r) {
+    cSending = false;
+    if (r.ok == 1) {
+      cStatusKind = "ok";
+      cStatusMsg = "已收到你的留言,我们会尽快回信到 " + tEmail + "。";
+    } else {
+      cStatusKind = "err";
+      cStatusMsg = "发送失败(网络或服务端问题),请稍后重试;急事可先去 VS Code Marketplace 的 Q&A 留言。";
+      cShowAlt = true;
+    }
+  }
+
+  Text("${cStatusMsg}") {
+    id: "formStatus"; marginTop: 14; size: 14; color: statusColor; lineHeight: "1.6";
+    setAttr(self, "role", "status"); setAttr(self, "aria-live", "polite");
+  }
+}
+
+// ── 替代联系渠道:发送失败才出现,两张卡片用网格铺开(auto-fit 天然处理窄屏折行)────────
+container AltChannels() {
+  id: "altChannels"; marginTop: 8;
+  Box {
+    display: "grid"; gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))"; gap: 18; maxWidth: "780px";
+
+    Column {
+      bg: cPanel; border: "1px solid " + cLine; radius: 12; pad: 24;
+      Text("now · 现在就能用") {
+        font: fMono; size: 11; letterSpacing: "0.14em"; color: cSignal;
+        border: "1px solid " + cLine; radius: 999; pad: (5, 10); marginBottom: 14; bg: cBgDeep; width: hug;
+      }
+      Text("VS Code Marketplace Q&A") { size: 17; weight: bold; color: cText; marginBottom: 10; }
+      Text("扩展页自带问答区:报 bug、提问都行,回复公开可查,后来人也能搜到同款问题。") {
+        size: 14; color: cDim; marginBottom: 16; lineHeight: "1.6";
+      }
+      number qnaCta = ctaLink("去 Q&A 提问", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript&ssr=false#qna", true);
+      setAttr(qnaCta, "target", "_blank"); setAttr(qnaCta, "rel", "noopener");
+      append(self, qnaCta);
+    }
+
+    Column {
+      bg: cPanel; border: "1px solid " + cLine; radius: 12; pad: 24;
+      Text("soon · 即将开通") {
+        font: fMono; size: 11; letterSpacing: "0.14em"; color: cDim;
+        border: "1px solid " + cLine; radius: 999; pad: (5, 10); marginBottom: 14; bg: cBgDeep; width: hug;
+      }
+      Text("联系邮箱") { size: 17; weight: bold; color: cText; marginBottom: 10; }
+      Text("专用联系邮箱正在开通中,开通后这里会换成直达表单——留言直接进我们的收件箱。") {
+        size: 14; color: cDim; marginBottom: 16; lineHeight: "1.6";
+      }
+      Text("coming soon…") { font: fMono; size: 13; color: cDim; lineHeight: "1.6"; }
+    }
+  }
+}
+
+container ContactSection() {
+  bg: cBg; pad: (40, 0, 72, 0);
+  WrapCol {
+    pad: (0, 24);
+    ContactForm()
+    if (cShowAlt) { AltChannels() }
+  }
+}
+
+// ── 整页 ─────────────────────────────────────────────────────────────────────
+container App() {
+  font: fSans; bg: cBg; color: cText;
+  NavBar()
+  PageHead()
+  ContactSection()
+  Footer {
+    bg: cBg; borderTop: "1px solid " + cLine; pad: (32, 0, 44, 0);
+    WrapRow {
+      pad: (0, 24); gap: 20; flexWrap: "wrap"; alignItems: "center";
+      Text("© 2026 WhenScript · 写入,即触发") { color: cDim; size: 13; }
+      Box { width: fill; minWidth: "20px"; }
+      append(self, navLink("联系我们", "./contact.html", false, false));
+      append(self, navLink("VS Code Marketplace", "https://marketplace.visualstudio.com/items?itemName=whenscript-lang.whenscript", false, true));
+      append(self, navLink("GitHub", "https://github.com/NightPoetry/whenscript", false, true));
+    }
+  }
+}
+
+setStyle(query("body"), "margin", "0");
+setStyle(query("body"), "padding", "0");
+setStyle(query("body"), "background", cBg);
+App();

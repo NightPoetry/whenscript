@@ -5,57 +5,70 @@
 <title>WhenScript Playground · runner</title>
 <style>
   html, body { height: 100%; }
-  body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, sans-serif; background: #ffffff; color: #111; }
+  /* app 内容由 host_create 直接挂到 body;输出条固定在底部浮层,给 body 留出底部内边距不被遮住。 */
+  body { margin: 0; padding: 16px 16px 132px 16px; font-family: system-ui, -apple-system, "PingFang SC", sans-serif; background: #ffffff; color: #111; }
+  #out {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 38%; overflow-y: auto;
+    background: #14111f; color: #ece8f8; border-top: 1px solid #3b3358;
+    font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 6px 12px;
+  }
+  #out .placeholder { color: #a89fc8; font-style: italic; }
+  #out .line { white-space: pre-wrap; word-break: break-word; padding: 3px 0; border-bottom: 1px dashed #262138; }
+  #out .line:last-child { border-bottom: none; }
+  #out .line.err { color: #ff7a90; }
 </style>
 </head>
 <body>
+<div id="out"><div class="placeholder">(输出 —— print() 的内容和报错会显示在这里)</div></div>
 <script type="module">
-  // 这个页面单独跑在 playground 的 iframe 里:每次"运行"父页都会整个销毁旧 iframe、
-  // 换一个全新的(见 playground.html),所以这里天然是"一个干净引擎实例、只 boot 一次"。
-  // 不改 host.js 一个字——host.js 已经把 boot 结果和每次 ws_fire/ws_fire_str/ws_fire_json 的
-  // 增量输出 console.log 出来了,这里只是"劫持"console.log 把带标签的那几条转发给父页,
-  // 渲染进右栏的输出条。
+  // playground 的沙箱 trampoline(纯 infra,非 when 化目标:它就是 boot wasm 的引导层)。
+  // 每次"运行"父页 playground.when 都把源码 toHex 编进本页的 ?hex= 参数、换 &n= 强制整页重载 →
+  // 天然是"一个干净引擎实例、只 boot 一次"。app 的 DOM 由 host_create 挂到 body;print()/报错捕获进
+  // 底部固定输出条(不再 postMessage 给父页 —— 父页是 when 写的,不做跨 frame 消息)。
   import { boot } from "./host.js";
 
-  const post = (type, payload) => parent.postMessage({ type, ...(payload || {}) }, "*");
+  const outEl = document.getElementById("out");
+  function emit(text, isErr) {
+    const ph = outEl.querySelector(".placeholder"); if (ph) ph.remove();
+    const d = document.createElement("div"); d.className = "line" + (isErr ? " err" : "");
+    d.textContent = text; outEl.appendChild(d); outEl.scrollTop = outEl.scrollHeight;
+  }
 
+  // host.js 用 [boot]/[ws_fire*] 标签 console.log 出增量结果 —— 劫持转进输出条。
   const origLog = console.log.bind(console);
   console.log = (...args) => {
     origLog(...args);
     const [tag, text] = args;
-    // host.js 里恰好只用这几个标签 console.log 文本结果:[boot] / [ws_fire] / [ws_fire_str] / [ws_fire_json]
-    if (typeof tag === "string" && /^\[(boot|ws_fire\w*)\]$/.test(tag) && typeof text === "string" && text.length > 0) {
-      post("output", { text, isError: text.indexOf("ERROR") === 0 });
-    }
+    if (typeof tag === "string" && /^\[(boot|ws_fire\w*)\]$/.test(tag) && typeof text === "string" && text.length > 0)
+      emit(text, text.indexOf("ERROR") === 0);
   };
-
   window.addEventListener("error", (e) => {
     const m = e.message || String(e.error || e);
-    // "ResizeObserver loop …" 是浏览器已知的良性警告(尺寸感知一帧没派发完),功能正常,不当错误显示。
-    if (m.indexOf("ResizeObserver loop") >= 0) return;
-    post("output", { text: "ERROR: " + m, isError: true });
+    if (m.indexOf("ResizeObserver loop") >= 0) return;   // 浏览器已知良性警告,不当错误
+    emit("ERROR: " + m, true);
   });
   window.addEventListener("unhandledrejection", (e) => {
-    const r = e.reason;
-    post("output", { text: "ERROR: " + (r && r.message ? r.message : String(r)), isError: true });
+    const r = e.reason; emit("ERROR: " + (r && r.message ? r.message : String(r)), true);
   });
 
-  let ran = false;
-  async function run(source) {
-    if (ran) return;   // 一个 iframe 实例只 boot 一次;要重跑就让父页换一个新 iframe
-    ran = true;
-    try {
-      await boot("./whenscript.wasm", source);
-      post("ready", {});
-    } catch (e) {
-      post("output", { text: "ERROR: " + (e && e.message ? e.message : String(e)), isError: true });
-    }
+  // 十六进制解码(URL 全安全字符,零转义):父页 toHex(源码) → 这里还原成 UTF-8。
+  function hexDecode(h) {
+    if (h.length % 2) return "";
+    const bytes = new Uint8Array(h.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(h.substr(i * 2, 2), 16);
+    return new TextDecoder().decode(bytes);
   }
 
-  window.addEventListener("message", (ev) => {
-    if (ev.data && ev.data.type === "run") run(ev.data.source);
-  });
-  post("runner-ready", {});
+  (async () => {
+    try {
+      const hex = new URLSearchParams(location.search).get("hex") || "";
+      const source = hex ? hexDecode(hex) : "";
+      if (!source) { emit("(空程序 —— 在左侧编辑区写点 WhenScript)"); return; }
+      await boot("./whenscript.wasm", source);
+    } catch (e) {
+      emit("ERROR: " + (e && e.message ? e.message : String(e)), true);
+    }
+  })();
 </script>
 </body>
 </html>

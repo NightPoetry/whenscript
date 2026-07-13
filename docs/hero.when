@@ -3,7 +3,7 @@ import { Text, Button } from "dom";
 
 number count  = 0;
 number double := count * 2;                          // 派生:count 一变它就变
-string mood   := if (count > 4) { "🔥 信号拉满了" } else { "点按钮,看值自己流动" };
+string mood   := if (count > 4) { "信号已跨过阈值" } else { "点按钮,看值自己流动" };
 
 container Demo() {
   fontFamily: "system-ui, sans-serif"; padding: "22px"; textAlign: "center";
