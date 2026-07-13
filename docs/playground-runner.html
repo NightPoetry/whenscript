@@ -53,10 +53,15 @@
   });
 
   // canvas 类demo(game2d 等)的容器是固定像素尺寸(如 320×480),不随 iframe 变矮而收缩 ——
-  // 面板矮于游戏高度时会被底部输出条盖住/看着"超出容器"。这里只做视觉缩放(transform:scale,
-  // 只缩小不放大),不碰 .when 里的坐标系统:从 canvas 往上找第一个带内联 width/height 的祖先
-  // (game2d 的 stage 容器)当作缩放目标,按可视区域重新计算比例。非 canvas 的示例(文本/长页面)
-  // 天然允许滚动,不触发这段逻辑。
+  // 面板矮于游戏高度时会被底部输出条盖住。这里做视觉缩放(transform:scale,只缩小不放大),
+  // 不碰 .when 里的坐标系统:从 canvas 往上找第一个带内联 width/height 的祖先(game2d 的 stage
+  // 容器)当作缩放目标。三处配合"尽可能铺满 + 绝不出现滚动条":
+  //   ① 预留高度按输出条的实测高度算(通常就一行占位文字,远小于 max-height:38% 的上限),
+  //      不是按那个上限算,所以能缩得更小、游戏能占得更满;
+  //   ② transform 只改视觉,不改布局占位——缩小后原盒子还占着没缩小前的位置,套一层刚好等于
+  //      缩放后尺寸的包裹层顶替它在文档流里的位置,不留空白;
+  //   ③ 画布类 demo 是自成一体的固定视口,不需要背景滚动——直接 overflow:hidden。
+  // 非 canvas 的示例(文本/长页面)不触发这段逻辑,滚动行为不变。
   function fitCanvasContainer() {
     const canvas = document.querySelector("canvas");
     if (!canvas) return;
@@ -65,11 +70,27 @@
     if (!el || el === document.body) return;
     const w = parseFloat(el.style.width), h = parseFloat(el.style.height);
     if (!w || !h) return;
-    const availW = document.body.clientWidth - 32;   // 左右各 16px padding
-    const availH = window.innerHeight - 16 - 132;     // 顶部 padding + 底部输出条预留空间
+
+    let wrap = el.parentElement;
+    if (!wrap.__isFitWrap) {
+      wrap = document.createElement("div");
+      el.parentNode.insertBefore(wrap, el);
+      wrap.appendChild(el);
+      wrap.__isFitWrap = true;
+      wrap.style.margin = "0 auto";
+      el.style.margin = "0";   // 居中改由 wrap 负责,避免和 transform 叠加算错
+    }
+
+    const outH = outEl.getBoundingClientRect().height || 40;
+    const availW = document.body.clientWidth - 32;      // 左右各 16px padding
+    const availH = window.innerHeight - 32 - outH;       // 上下各 16px padding + 输出条实测高度
     const scale = Math.min(1, availW / w, availH / h);
+
     el.style.transform = scale < 1 ? `scale(${scale})` : "";
     el.style.transformOrigin = "top center";
+    wrap.style.width = (w * scale) + "px";
+    wrap.style.height = (h * scale) + "px";
+    document.body.style.overflow = "hidden";
   }
 
   (async () => {
