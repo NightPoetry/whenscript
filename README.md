@@ -52,4 +52,4 @@ editor/   VS Code 扩展源码
 
 ## License
 
-[MIT License Plus (Attribution Required)](./LICENSE) © 2026 NightPoetry and WhenScript contributors
+[MIT License Plus (Attribution Required; Patent Defense)](./LICENSE) © 2026 NightPoetry and WhenScript contributors

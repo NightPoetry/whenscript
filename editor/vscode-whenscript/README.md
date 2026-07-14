@@ -100,7 +100,7 @@ editor/vscode-whenscript/
 ├── src/extension.js                   激活入口(LSP 客户端,纯 JS)
 ├── icon.png                           扩展图标(256x256,scripts/gen-icon.mjs 生成)
 ├── scripts/gen-icon.mjs               零依赖生成 icon.png 的脚本(打包时排除)
-├── LICENSE                            MIT 协议 Plus(附署名要求,见文件内条款)
+├── LICENSE                            MIT 协议 Plus(附署名要求 + 专利防御条款,见文件内条款)
 ├── CHANGELOG.md                       版本更新日志(Marketplace 会展示)
 ├── 发布指南.md                         从零到上架 Marketplace 的完整步骤(打包时排除)
 ├── demo.when                          高亮测试样例(不是能跑的程序)
